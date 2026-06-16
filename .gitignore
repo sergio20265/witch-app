@@ -1,0 +1,22 @@
+node_modules/
+dist/
+*.apk
+*.aab
+*.apks
+*.tsbuildinfo
+.env
+.env.*
+*.local
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Android build artifacts (нативный проект коммитим, сборки — нет)
+android/.gradle/
+android/app/build/
+android/build/
+android/capacitor-cordova-android-plugins/
+android/local.properties
+*.keystore
+*.jks

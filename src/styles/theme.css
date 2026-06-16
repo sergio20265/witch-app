@@ -1,0 +1,260 @@
+/* ====================================================================
+   Лесной гримуар — дизайн-система
+   Тёмный лес · глубокий зелёный · приглушённое золото · старая бумага
+   ==================================================================== */
+
+:root {
+  /* --- Цвета: лесная палитра --- */
+  --forest-abyss: #0b140f;     /* самый тёмный фон */
+  --forest-deep: #0f1a14;      /* основной фон */
+  --forest-night: #142219;     /* поверхности */
+  --forest-moss: #1c2e22;      /* приподнятые карточки */
+  --forest-fern: #2c4434;      /* границы, ховеры */
+  --forest-sage: #6f8f78;      /* приглушённый текст */
+  --forest-mist: #a9c2af;      /* вторичный текст */
+  --forest-pale: #e8efe6;      /* основной текст */
+
+  /* Золото / латунь — акценты */
+  --gold: #c9a45c;
+  --gold-soft: #d8bd84;
+  --gold-dim: #8a6f3c;
+
+  /* Луна / свечение */
+  --moon: #f3eddc;
+  --candle: #e7b96b;
+  --ember: #c8743a;
+
+  /* Семантика */
+  --bg: var(--forest-deep);
+  --surface: var(--forest-night);
+  --surface-raised: var(--forest-moss);
+  --border: rgba(201, 164, 92, 0.18);
+  --border-strong: rgba(201, 164, 92, 0.34);
+  --text: var(--forest-pale);
+  --text-dim: var(--forest-mist);
+  --text-faint: var(--forest-sage);
+  --accent: var(--gold);
+
+  /* --- Шрифты --- */
+  --font-display: 'Cormorant Garamond', Georgia, serif;  /* заголовки */
+  --font-body: 'Spectral', Georgia, serif;               /* текст */
+  --font-script: 'Marck Script', cursive;                /* рукописные акценты */
+
+  /* --- Скругления / тени --- */
+  --radius-sm: 10px;
+  --radius: 16px;
+  --radius-lg: 22px;
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --shadow-deep: 0 18px 50px rgba(0, 0, 0, 0.6);
+  --glow-gold: 0 0 24px rgba(201, 164, 92, 0.22);
+
+  /* Безопасные зоны (вырезы / навигация Android) */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --nav-height: 64px;
+
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--forest-abyss);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-weight: 400;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  margin: 0 0 0.4em;
+  color: var(--text);
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.2rem; }
+
+p { margin: 0 0 0.8em; }
+
+a { color: var(--gold-soft); text-decoration: none; }
+
+button {
+  font-family: var(--font-body);
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+input, textarea, select {
+  font-family: var(--font-body);
+  color: var(--text);
+}
+
+::selection { background: rgba(201, 164, 92, 0.3); }
+
+/* Скрытый скроллбар для уюта */
+::-webkit-scrollbar { width: 0; height: 0; }
+
+/* --- Утилиты текста --- */
+.script { font-family: var(--font-script); color: var(--gold-soft); }
+.eyebrow {
+  font-family: var(--font-body);
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  font-size: 0.7rem;
+  color: var(--text-faint);
+}
+.muted { color: var(--text-dim); }
+.faint { color: var(--text-faint); }
+.center { text-align: center; }
+
+/* ====================================================================
+   Компоненты дизайн-системы
+   ==================================================================== */
+
+/* Карточка-страница гримуара */
+.card {
+  position: relative;
+  background:
+    linear-gradient(160deg, rgba(28, 46, 34, 0.92), rgba(15, 26, 20, 0.95));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow-soft);
+}
+
+.card--glow { box-shadow: var(--shadow-soft), var(--glow-gold); }
+
+/* Тонкая золотая рамка-орнамент внутри карточки */
+.card--framed::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 8px);
+  pointer-events: none;
+}
+
+/* Кнопки */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
+  border: 1px solid transparent;
+}
+.btn:active { transform: scale(0.97); }
+
+.btn--primary {
+  background: linear-gradient(180deg, var(--gold-soft), var(--gold-dim));
+  color: #20180a;
+  font-weight: 500;
+  box-shadow: var(--glow-gold);
+}
+
+.btn--ghost {
+  background: rgba(201, 164, 92, 0.06);
+  border-color: var(--border-strong);
+  color: var(--gold-soft);
+}
+
+.btn--block { width: 100%; }
+
+/* Чипы / теги */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  background: rgba(201, 164, 92, 0.08);
+  border: 1px solid var(--border);
+  color: var(--gold-soft);
+}
+.chip--active {
+  background: linear-gradient(180deg, var(--gold-soft), var(--gold-dim));
+  color: #20180a;
+  border-color: transparent;
+}
+.chip[role='button'] { cursor: pointer; }
+
+/* Поля ввода */
+.field {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  background: rgba(11, 20, 15, 0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+.field:focus { border-color: var(--border-strong); }
+.field::placeholder { color: var(--text-faint); }
+textarea.field { resize: vertical; min-height: 110px; line-height: 1.6; }
+
+.label {
+  display: block;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin: 0 0 6px;
+}
+
+/* Декоративный разделитель «свеча» */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--gold-dim);
+  margin: 18px 0;
+}
+.divider::before, .divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
+}
+
+/* Пустое состояние */
+.empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-faint);
+}
+.empty .glyph { font-size: 2.4rem; opacity: 0.5; display: block; margin-bottom: 10px; }
+
+/* Анимации */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise { animation: rise 0.5s ease both; }
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  45% { opacity: 0.82; }
+  55% { opacity: 0.92; }
+}
+.flicker { animation: flicker 4s ease-in-out infinite; }
