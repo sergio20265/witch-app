@@ -5,6 +5,9 @@ export const STEPS_PER_DAY = 2;
 export const SKILL_THRESHOLD = 3;
 /** Сколько очков → открыть перекрёсток смены типажа. */
 export const CROSSROAD_THRESHOLD = 6;
+export const FAMILIAR_BOND_MIN = -5;
+export const FAMILIAR_BOND_MAX = 10;
+export const SECOND_FAMILIAR_BOND = 10;
 
 export interface Familiar {
   id: string;
@@ -32,6 +35,17 @@ export const familiars: Familiar[] = [
 export function familiarById(id: string | undefined): Familiar | undefined {
   return id ? familiars.find((f) => f.id === id) : undefined;
 }
+
+/** Дракон — особая редкая встреча. Дружба с ним хранится отдельно от фамильяра. */
+export const dragon = {
+  name: 'Дракон',
+  glyph: '🐉',
+  blurb: 'Древний и громадный, он спустился с туманных гор. С тем, кого признал, дракон делит небо и тайны, что старше леса.',
+  meetText:
+    'Тропа выводит на открытый кряж, и тень накрывает тебя целиком. На скале, сложив крылья, лежит дракон — чешуя как мох на старых валунах, глаза как два уголька. Он не нападает. Он ждёт, узнаешь ли ты его.',
+  befriend: 'Дракон склоняет голову. Отныне у тебя есть друг размером с грозу.',
+  decline: 'Ты кланяешься в ответ и отступаешь. Дракон провожает тебя взглядом — без обиды.',
+} as const;
 
 /** К какому типажу фамильяр ближе всего (подсказка по стилю карточки, не замок). */
 export const familiarAffinity: Record<string, string> = {

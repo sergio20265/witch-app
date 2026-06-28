@@ -1192,6 +1192,31 @@
 }
 .familiar-card__namerow h3 { margin: 0; }
 .familiar-card__blurb { margin: 8px 0 0; font-size: 0.86rem; color: var(--muted); line-height: 1.45; }
+.familiar-bond {
+  height: 7px;
+  margin: 9px 0 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(201, 164, 92, 0.18);
+}
+.familiar-bond span {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(154, 159, 176, 0.85), rgba(201, 164, 92, 0.95));
+}
+.familiar-influence {
+  margin: 2px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm, 12px);
+  border: 1px solid color-mix(in srgb, var(--path-accent, var(--gold-soft)) 28%, transparent);
+  background: color-mix(in srgb, var(--path-accent, var(--gold-soft)) 9%, rgba(15, 26, 20, 0.72));
+  color: var(--text-dim);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
 
 /* Кнопка-переход в профиль под тропинками */
 .profile-link {

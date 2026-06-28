@@ -6,11 +6,11 @@ import { useLocalStorage, readStore, writeStore } from '../storage/useLocalStora
 import type { PathState } from '../storage/types';
 import {
   defaultPathState, deriveStep, stepsLeftToday,
-  commitQuiet, commitFamiliar, commitEncounter, commitCrossroad,
+  activeFamiliars, commitQuiet, commitFamiliar, commitEncounter, commitCrossroad, commitDragon, commitFamiliarInteraction,
 } from '../lib/path';
 import { crossroadFlavor, type PathBranch, type PathEvent, type PathNode } from '../data/pathEvents';
 import { identityFor } from '../data/identities';
-import { familiarById, trinketById } from '../data/path';
+import { familiarById, trinketById, dragon } from '../data/path';
 import { pathArtFor, familiarArtById, familiarIconById } from '../assets';
 import { shareCard } from '../lib/shareCard';
 import { todayISO } from '../lib/date';
@@ -34,7 +34,7 @@ export function MyPath() {
   const [accAff, setAccAff] = useState<Record<string, number>>({});
   const [accTr, setAccTr] = useState<string[]>([]);
   // Итоговая карточка после совершённого шага.
-  const [result, setResult] = useState<{ outcome: string; learned: string[]; found?: string } | null>(null);
+  const [result, setResult] = useState<{ outcome: string; learned: string[]; found?: string; note?: string } | null>(null);
 
   function resetEncounter() {
     setNode(null); setAccAff({}); setAccTr([]);
@@ -57,12 +57,17 @@ export function MyPath() {
     } else if (step.kind === 'familiar') {
       const fam = familiarById(step.familiarId);
       name = fam?.name ?? name; text = fam?.blurb ?? '';
+    } else if (step.kind === 'familiarEvent') {
+      const fam = familiarById(step.interaction.familiarId);
+      name = step.interaction.title; text = `${fam?.name ?? 'Спутник'}: ${step.interaction.text}`;
+    } else if (step.kind === 'dragon') {
+      name = dragon.name; text = dragon.blurb;
     } else if (step.kind === 'crossroad') {
       name = 'Перекрёсток путей'; text = crossroadFlavor[step.targetId] ?? '';
     }
     setSharing(true);
     try {
-      await shareCard({ name, text, artUrl: stepArtUrl(step), dialogTitle: 'Поделиться тропинкой' });
+      await shareCard({ name, text, artUrl: stepArtUrl(step, identity.id), dialogTitle: 'Поделиться тропинкой' });
     } catch { /* закрыли шторку */ } finally {
       setSharing(false);
     }
@@ -88,12 +93,40 @@ export function MyPath() {
   }
 
   function chooseFamiliar(familiarId: string, adopt: boolean) {
+    const before = activeFamiliars(state);
     setState(commitFamiliar(state, familiarId, adopt, today));
     const fam = familiarById(familiarId);
+    const canAdd = before.length > 0 && before.length < 2 && before.some((f) => f.bond >= 10);
     setResult({
-      outcome: adopt ? `${fam?.name} теперь идёт с тобой.` : 'Зверёк глядит на тебя и скрывается в чаще.',
+      outcome: adopt
+        ? canAdd
+          ? `${fam?.name} теперь идёт с тобой как второй спутник.`
+          : `${fam?.name} теперь идёт с тобой.`
+        : 'Зверёк глядит на тебя и скрывается в чаще.',
       learned: [],
     });
+  }
+
+  function chooseFamiliarInteraction(choiceIndex: number) {
+    if (step.kind !== 'familiarEvent') return;
+    const choice = step.interaction.choices[choiceIndex];
+    const res = commitFamiliarInteraction(state, step.interaction, choice, identity.id, today);
+    setState(res.state);
+    const leftName = res.left ? familiarById(res.left)?.name : undefined;
+    setResult({
+      outcome: choice.outcome,
+      learned: res.learned,
+      note: res.unlockedSecond
+        ? 'Связь стала такой крепкой, что тропа разрешила принять второго фамильяра.'
+        : leftName
+          ? `${leftName} ушёл с тропы. Связь оборвалась.`
+          : undefined,
+    });
+  }
+
+  function chooseDragon(adopt: boolean) {
+    setState(commitDragon(state, adopt, today));
+    setResult({ outcome: adopt ? dragon.befriend : dragon.decline, learned: [] });
   }
 
   function chooseCrossroad(targetId: string, accept: boolean) {
@@ -125,6 +158,7 @@ export function MyPath() {
             {result.found && trinketById(result.found) && (
               <div className="path-found">{trinketById(result.found)!.glyph} Находка: {trinketById(result.found)!.name}</div>
             )}
+            {result.note && <div className="path-learned">{result.note}</div>}
             {result.learned.map((id) => (
               <div key={id} className="path-learned">{identityFor(id).glyph} Перенято ремесло: {identityFor(id).label}</div>
             ))}
@@ -142,7 +176,7 @@ export function MyPath() {
         ) : (
           <>
             <div className="path-scene-wrap rise">
-              <div className="path-scene-art" style={{ backgroundImage: `url(${stepArtUrl(step)})` }} aria-hidden />
+              <div className="path-scene-art" style={{ backgroundImage: `url(${stepArtUrl(step, identity.id)})` }} aria-hidden />
               <button className="path-share-btn" onClick={shareScene} disabled={sharing} aria-label="Поделиться сценой">
                 {sharing ? '…' : '↑'}
               </button>
@@ -175,10 +209,60 @@ export function MyPath() {
                     <button className="btn btn--primary btn--block" onClick={() => chooseFamiliar(fam.id, true)}>Подружиться</button>
                     <button className="btn btn--ghost" onClick={() => chooseFamiliar(fam.id, false)}>Пусть идёт</button>
                   </div>
-                  {state.familiar && <p className="faint center" style={{ fontSize: '0.74rem', marginTop: 8 }}>Если подружишься, он сменит твоего нынешнего спутника.</p>}
+                  {activeFamiliars(state).length > 0 && (
+                    <p className="faint center" style={{ fontSize: '0.74rem', marginTop: 8 }}>
+                      {activeFamiliars(state).length < 2 && activeFamiliars(state).some((f) => f.bond >= 10)
+                        ? 'Связь с первым спутником крепка: можно принять второго.'
+                        : 'Если второго места нет, новый спутник сменит одного из нынешних.'}
+                    </p>
+                  )}
                 </div>
               );
             })()}
+
+            {step.kind === 'familiarEvent' && (() => {
+              const fam = familiarById(step.interaction.familiarId)!;
+              return (
+                <div className="path-card rise">
+                  <div className="eyebrow">{step.interaction.title}</div>
+                  <div className="path-familiar">
+                    {familiarIconById[fam.id]
+                      ? <img className="path-familiar__icon" src={familiarIconById[fam.id]} alt={fam.name} />
+                      : <span className="path-familiar__glyph">{fam.glyph}</span>}
+                    <div>
+                      <h3 style={{ margin: 0 }}>{fam.name}</h3>
+                      <p className="muted" style={{ margin: '4px 0 0' }}>{fam.blurb}</p>
+                    </div>
+                  </div>
+                  <p className="path-scene-text">{step.interaction.text}</p>
+                  <div className="stack stack--tight">
+                    {step.interaction.choices.map((choice, i) => (
+                      <button key={i} className="path-choice" onClick={() => chooseFamiliarInteraction(i)}>
+                        {choice.text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {step.kind === 'dragon' && (
+              <div className="path-card rise">
+                <div className="eyebrow">Редкая встреча</div>
+                <div className="path-familiar">
+                  <span className="path-familiar__glyph">{dragon.glyph}</span>
+                  <div>
+                    <h3 style={{ margin: 0 }}>{dragon.name}</h3>
+                    <p className="muted" style={{ margin: '4px 0 0' }}>{dragon.blurb}</p>
+                  </div>
+                </div>
+                <p className="path-scene-text">{dragon.meetText}</p>
+                <div className="fab-bar">
+                  <button className="btn btn--primary btn--block" onClick={() => chooseDragon(true)}>Подружиться</button>
+                  <button className="btn btn--ghost" onClick={() => chooseDragon(false)}>Поклониться и уйти</button>
+                </div>
+              </div>
+            )}
 
             {step.kind === 'crossroad' && (
               <div className="path-card rise">
@@ -227,9 +311,28 @@ export function MyPath() {
   );
 }
 
-function stepArtUrl(step: { kind: string; event?: PathEvent; familiarId?: string }): string {
-  if (step.kind === 'event' && step.event) return pathArtFor(step.event.art);
+const cityPathArt = [
+  'path-city-1', 'path-city-2', 'path-city-3', 'path-city-4', 'path-city-5',
+  'path-city-6', 'path-city-7', 'path-city-8', 'path-city-9',
+];
+
+function pickFrom(pool: string[], key: string): string {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return pool[h % pool.length];
+}
+
+function stepArtUrl(step: { kind: string; event?: PathEvent; familiarId?: string; interaction?: { familiarId: string } }, identityId: string): string {
+  if (step.kind === 'event' && step.event) {
+    if (identityId === 'city' && step.event.tracks?.includes('city') && !step.event.art.startsWith('path-city-')) {
+      return pathArtFor(pickFrom(cityPathArt, step.event.id));
+    }
+    return pathArtFor(step.event.art);
+  }
   if (step.kind === 'familiar' && step.familiarId) return familiarArtById[step.familiarId] ?? pathArtFor('path-familiar');
+  if (step.kind === 'familiarEvent' && step.interaction) return familiarArtById[step.interaction.familiarId] ?? pathArtFor('path-familiar');
+  if (step.kind === 'dragon') return pathArtFor('path-dragon');
   if (step.kind === 'crossroad') return pathArtFor('path-crossroad');
+  if (identityId === 'city') return pathArtFor(pickFrom(cityPathArt, 'quiet-city'));
   return pathArtFor('path-quiet');
 }

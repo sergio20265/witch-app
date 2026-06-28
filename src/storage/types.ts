@@ -133,19 +133,33 @@ export interface PathLogEntry {
   outcome: string;    // что вышло
 }
 
+export interface PathFamiliarState {
+  id: string;                         // id фамильяра ('cat', 'owl'...)
+  name?: string;                      // данное имя
+  bond: number;                       // связь: -5 уходит, 10 открывает второй слот
+}
+
 export interface PathState {
   step: number;                       // сколько шагов пройдено всего
   lastStepDate?: string;              // yyyy-mm-dd последнего шага
   stepsToday: number;                 // шагов сделано сегодня (лимит — STEPS_PER_DAY)
   affinity: Record<string, number>;   // склонности по типажам (id → очки)
-  familiar?: string;                  // выбранный фамильяр (id вида 'cat')
-  familiarName?: string;              // данное ему имя (необязательно)
+  familiar?: string;                  // legacy: первый фамильяр (id вида 'cat')
+  familiarName?: string;              // legacy: имя первого фамильяра
+  familiars?: PathFamiliarState[];    // новые слоты фамильяров, максимум 2
+  secondFamiliarUnlocked?: boolean;   // второй слот открыт высокой связью
   skills: string[];                   // перенятые ремёсла (id типажей)
   trinkets: string[];                 // обереги/безделушки в котомке
   seen: string[];                     // пройденные сцены (чтобы не повторялись)
   log: PathLogEntry[];                // летопись пути
-  forcedStep?: 'gift';                // подарок-извинение: фамильяр / редкое событие / обычный рандом
+  dragon?: boolean;                   // подружилась с драконом (отдельно от фамильяра, виден в профиле)
+  forcedSteps?: ForcedStep[];         // очередь гарантированных шагов (подарок-извинение)
+  bonusSteps?: number;                // доп. шаги сверх дневного лимита (не считаются в stepsToday)
+  famCooldownUntil?: number;          // до какого step фамильяры не встречаются (после принятия — 4 шага)
 }
+
+/** Гарантированный шаг из очереди подарка: фамильяр-«извинение» / медведь / шанс дракона. */
+export type ForcedStep = 'gift' | 'bear' | 'dragon-chance';
 
 // ===== Воспоминания =====
 export interface Memory {
