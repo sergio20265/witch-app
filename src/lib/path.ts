@@ -9,7 +9,7 @@ import { pathEvents, quietLinesFor, type PathEvent } from '../data/pathEvents';
 import {
   STEPS_PER_DAY, SKILL_THRESHOLD, CROSSROAD_THRESHOLD,
   FAMILIAR_BOND_MIN, FAMILIAR_BOND_MAX, SECOND_FAMILIAR_BOND,
-  familiars, familiarAffinity, trinkets,
+  familiars, familiarAffinity, trinkets, dragons,
 } from '../data/path';
 import { identityFor } from '../data/identities';
 import type { PathState, PathLogEntry, PathFamiliarState } from '../storage/types';
@@ -68,10 +68,14 @@ function syncLegacy(state: PathState, companions: PathFamiliarState[]): PathStat
   };
 }
 
+const familiarIds = new Set(familiars.map((f) => f.id));
+
 export function activeFamiliars(state: PathState): PathFamiliarState[] {
   if (state.familiars && state.familiars.length > 0) {
     return state.familiars
-      .filter((f) => familiarAffinity[f.id])
+      // Раньше фильтровали по familiarAffinity и роняли нейтральных (универсальных)
+      // спутников; теперь проверяем лишь, что фамильяр существует.
+      .filter((f) => familiarIds.has(f.id))
       .map((f) => ({ ...f, bond: clampBond(f.bond ?? 0) }))
       .slice(0, 2);
   }
@@ -95,7 +99,8 @@ export function familiarBondLabel(bond: number): string {
 function familiarInfluence(state: PathState, identityId: string) {
   const companions = activeFamiliars(state).filter((f) => f.bond > 0);
   const own = companions.filter((f) => familiarAffinity[f.id] === identityId);
-  const foreign = companions.filter((f) => familiarAffinity[f.id] !== identityId);
+  // Нейтральные (без типа) спутники не считаются чужими: они не двигают навыки и не глушат пару.
+  const foreign = companions.filter((f) => familiarAffinity[f.id] && familiarAffinity[f.id] !== identityId);
   const muted = own.length > 0 && foreign.length > 0;
   return { companions, own, foreign, muted };
 }
@@ -132,6 +137,20 @@ function dragonChance(state: PathState, identityId: string): number {
   if (influence.muted) return DRAGON_CHANCE;
   const ownBond = influence.own.reduce((sum, f) => sum + Math.max(0, f.bond), 0);
   return Math.min(5, DRAGON_CHANCE + Math.floor(ownBond / 5));
+}
+
+/** С какими драконами уже подружились (с учётом старого булева поля). */
+export function befriendedDragons(state: PathState): string[] {
+  if (state.dragonFriends && state.dragonFriends.length > 0) return state.dragonFriends;
+  return state.dragon ? [dragons[0].id] : [];
+}
+
+/** Выбрать дракона для встречи — из тех, с кем ещё не подружились. */
+function pickDragon(state: PathState, seed: number): string | null {
+  const have = new Set(befriendedDragons(state));
+  const pool = dragons.filter((d) => !have.has(d.id));
+  if (pool.length === 0) return null;
+  return pool[hash(`dragon-which-${seed}-${state.step}`) % pool.length].id;
 }
 
 function pickFamiliarId(state: PathState, identityId: string, seed: number): string {
@@ -231,7 +250,7 @@ export type PathStep =
   | { kind: 'event'; event: PathEvent }
   | { kind: 'familiar'; familiarId: string }
   | { kind: 'familiarEvent'; interaction: FamiliarInteraction }
-  | { kind: 'dragon' }
+  | { kind: 'dragon'; dragonId: string }
   | { kind: 'crossroad'; targetId: string };
 
 /** Сцены, доступные текущему типажу и ещё не пройденные. */
@@ -274,8 +293,9 @@ export function deriveStep(state: PathState, identityId: string, today: string):
     return { kind: 'familiar', familiarId: 'bear' };
   }
   if (forced === 'dragon-chance') {
-    if (hash(`gift-dragon-${seed}-${state.step}`) % 100 < GIFT_DRAGON_CHANCE) {
-      return { kind: 'dragon' };
+    const did = pickDragon(state, seed);
+    if (did && hash(`gift-dragon-${seed}-${state.step}`) % 100 < GIFT_DRAGON_CHANCE) {
+      return { kind: 'dragon', dragonId: did };
     }
     // не выпал — проваливаемся в обычный рандом (подарочный шаг снимется при шаге)
   } else if (forced === 'gift') {
@@ -294,9 +314,10 @@ export function deriveStep(state: PathState, identityId: string, today: string):
   const target = pendingCrossroad(state, identityId);
   if (target) return { kind: 'crossroad', targetId: target };
 
-  // Редкая случайная встреча с драконом (пока с ним не подружились).
-  if (!state.dragon && hash(`dragon-${seed}-${state.step}`) % 100 < dragonChance(state, identityId)) {
-    return { kind: 'dragon' };
+  // Редкая случайная встреча с драконом (пока остались незнакомые).
+  if (hash(`dragon-${seed}-${state.step}`) % 100 < dragonChance(state, identityId)) {
+    const did = pickDragon(state, seed);
+    if (did) return { kind: 'dragon', dragonId: did };
   }
 
   const roll = hash(`step-${seed}-${state.step}`) % 100;
@@ -370,9 +391,12 @@ export function commitFamiliar(state: PathState, familiarId: string, adopt: bool
   return syncLegacy({ ...s, famCooldownUntil: s.step + 4 }, next);
 }
 
-export function commitDragon(state: PathState, adopt: boolean, today: string): PathState {
+export function commitDragon(state: PathState, dragonId: string, adopt: boolean, today: string): PathState {
   const s = bumpStep(state, today);
-  return adopt ? { ...s, dragon: true } : s;
+  if (!adopt) return s;
+  const have = befriendedDragons(s);
+  const dragonFriends = have.includes(dragonId) ? have : [...have, dragonId];
+  return { ...s, dragon: true, dragonFriends };
 }
 
 export interface EncounterResult {

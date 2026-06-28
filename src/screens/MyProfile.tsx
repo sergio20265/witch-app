@@ -5,9 +5,9 @@ import { PageHeader } from '../components/PageHeader';
 import { useLocalStorage, readStore } from '../storage/useLocalStorage';
 import { shareCard } from '../lib/shareCard';
 import type { PathState, PathFamiliarState } from '../storage/types';
-import { activeFamiliars, defaultPathState, familiarBondLabel, hasSecondFamiliarSlot } from '../lib/path';
+import { activeFamiliars, befriendedDragons, defaultPathState, familiarBondLabel, hasSecondFamiliarSlot } from '../lib/path';
 import { identityFor, craftGiftsFor, craftTierLabel } from '../data/identities';
-import { familiarById, familiarAffinity, trinketById, trinkets as allTrinkets, dragon } from '../data/path';
+import { familiarById, familiarAffinity, trinketById, trinkets as allTrinkets, dragonById } from '../data/path';
 import { familiarArtById, familiarIconById } from '../assets';
 import { formatShortDate } from '../lib/date';
 
@@ -22,7 +22,7 @@ const SECTION_LABEL: Record<string, string> = {
 function familiarInfluenceHint(companions: PathFamiliarState[], identityId: string): string {
   if (companions.length === 0) return '';
   const own = companions.filter((f) => familiarAffinity[f.id] === identityId);
-  const foreign = companions.filter((f) => familiarAffinity[f.id] !== identityId);
+  const foreign = companions.filter((f) => familiarAffinity[f.id] && familiarAffinity[f.id] !== identityId);
 
   if (own.length > 0 && foreign.length > 0) {
     return 'Родной и чужой спутники уравновешивают друг друга: редкие встречи и смена пути почти не усиливаются.';
@@ -34,8 +34,11 @@ function familiarInfluenceHint(companions: PathFamiliarState[], identityId: stri
     const labels = foreign.map((f) => identityFor(familiarAffinity[f.id]).label).join(' и ');
     return `Два чужих спутника тянут к другим ремёслам: быстрее растут навыки путей «${labels}», а перекрёсток может прийти раньше.`;
   }
-  const label = identityFor(familiarAffinity[foreign[0].id]).label;
-  return `Чужой спутник учит иному ремеслу: быстрее растут навыки пути «${label}», и со временем может открыться смена ведьминого типа.`;
+  if (foreign.length === 1) {
+    const label = identityFor(familiarAffinity[foreign[0].id]).label;
+    return `Чужой спутник учит иному ремеслу: быстрее растут навыки пути «${label}», и со временем может открыться смена ведьминого типа.`;
+  }
+  return 'Вольный спутник просто идёт рядом: на твой путь он не влияет, зато всегда тебе рад.';
 }
 
 export function MyProfile() {
@@ -121,7 +124,7 @@ export function MyProfile() {
               const familiar = familiarById(companion.id)!;
               const famPortrait = familiarArtById[familiar.id];
               const famName = companion.name || familiar.name;
-              const famKin = identityFor(familiarAffinity[familiar.id]);
+              const famKin = familiarAffinity[familiar.id] ? identityFor(familiarAffinity[familiar.id]) : null;
               const bondPercent = Math.max(0, Math.min(100, ((companion.bond + 5) / 15) * 100));
               return (
                 <div className="familiar-card" key={companion.id}>
@@ -137,7 +140,8 @@ export function MyProfile() {
                       </div>
                     </div>
                     <div className="meta">
-                      {index === 0 ? 'первый спутник' : 'второй спутник'} · {familiar.name} · ближе к пути «{famKin.label}»
+                      {index === 0 ? 'первый спутник' : 'второй спутник'} · {familiar.name}
+                      {famKin ? <> · ближе к пути «{famKin.label}»</> : <> · вольный спутник</>}
                     </div>
                     <div className="familiar-bond" aria-label={`Связь: ${companion.bond}`}>
                       <span style={{ width: `${bondPercent}%` }} />
@@ -159,17 +163,25 @@ export function MyProfile() {
           <p className="muted">Спутник ещё не встретился. Иди по тропинке — он сам тебя найдёт.</p>
         )}
 
-        {/* Дракон-друг */}
-        {path.dragon && (
+        {/* Драконы-друзья */}
+        {befriendedDragons(path).length > 0 && (
           <>
-            <h2 className="section-title">Дракон-друг</h2>
-            <div className="familiar-card">
-              <span className="familiar-card__glyph">{dragon.glyph}</span>
-              <div className="familiar-card__body">
-                <div className="familiar-card__namerow"><h3>{dragon.name}</h3></div>
-                <div className="meta">редкая встреча на тропе</div>
-                <p className="familiar-card__blurb">{dragon.blurb}</p>
-              </div>
+            <h2 className="section-title">{befriendedDragons(path).length > 1 ? 'Драконы-друзья' : 'Дракон-друг'}</h2>
+            <div className="stack stack--tight">
+              {befriendedDragons(path).map((id) => {
+                const d = dragonById(id);
+                if (!d) return null;
+                return (
+                  <div className="familiar-card" key={id}>
+                    <span className="familiar-card__glyph">{d.glyph}</span>
+                    <div className="familiar-card__body">
+                      <div className="familiar-card__namerow"><h3>{d.name}</h3></div>
+                      <div className="meta">редкая встреча на тропе</div>
+                      <p className="familiar-card__blurb">{d.blurb}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </>
         )}

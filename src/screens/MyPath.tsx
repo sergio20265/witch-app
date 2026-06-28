@@ -10,7 +10,7 @@ import {
 } from '../lib/path';
 import { crossroadFlavor, type PathBranch, type PathEvent, type PathNode } from '../data/pathEvents';
 import { identityFor } from '../data/identities';
-import { familiarById, trinketById, dragon } from '../data/path';
+import { familiarById, trinketById, dragonById } from '../data/path';
 import { pathArtFor, familiarArtById, familiarIconById } from '../assets';
 import { shareCard } from '../lib/shareCard';
 import { todayISO } from '../lib/date';
@@ -61,7 +61,8 @@ export function MyPath() {
       const fam = familiarById(step.interaction.familiarId);
       name = step.interaction.title; text = `${fam?.name ?? 'Спутник'}: ${step.interaction.text}`;
     } else if (step.kind === 'dragon') {
-      name = dragon.name; text = dragon.blurb;
+      const d = dragonById(step.dragonId);
+      name = d?.name ?? 'Дракон'; text = d?.blurb ?? '';
     } else if (step.kind === 'crossroad') {
       name = 'Перекрёсток путей'; text = crossroadFlavor[step.targetId] ?? '';
     }
@@ -124,9 +125,10 @@ export function MyPath() {
     });
   }
 
-  function chooseDragon(adopt: boolean) {
-    setState(commitDragon(state, adopt, today));
-    setResult({ outcome: adopt ? dragon.befriend : dragon.decline, learned: [] });
+  function chooseDragon(dragonId: string, adopt: boolean) {
+    setState(commitDragon(state, dragonId, adopt, today));
+    const d = dragonById(dragonId);
+    setResult({ outcome: adopt ? (d?.befriend ?? '') : (d?.decline ?? ''), learned: [] });
   }
 
   function chooseCrossroad(targetId: string, accept: boolean) {
@@ -246,23 +248,26 @@ export function MyPath() {
               );
             })()}
 
-            {step.kind === 'dragon' && (
-              <div className="path-card rise">
-                <div className="eyebrow">Редкая встреча</div>
-                <div className="path-familiar">
-                  <span className="path-familiar__glyph">{dragon.glyph}</span>
-                  <div>
-                    <h3 style={{ margin: 0 }}>{dragon.name}</h3>
-                    <p className="muted" style={{ margin: '4px 0 0' }}>{dragon.blurb}</p>
+            {step.kind === 'dragon' && (() => {
+              const d = dragonById(step.dragonId)!;
+              return (
+                <div className="path-card rise">
+                  <div className="eyebrow">Редкая встреча</div>
+                  <div className="path-familiar">
+                    <span className="path-familiar__glyph">{d.glyph}</span>
+                    <div>
+                      <h3 style={{ margin: 0 }}>{d.name}</h3>
+                      <p className="muted" style={{ margin: '4px 0 0' }}>{d.blurb}</p>
+                    </div>
+                  </div>
+                  <p className="path-scene-text">{d.meetText}</p>
+                  <div className="fab-bar">
+                    <button className="btn btn--primary btn--block" onClick={() => chooseDragon(d.id, true)}>Подружиться</button>
+                    <button className="btn btn--ghost" onClick={() => chooseDragon(d.id, false)}>Поклониться и уйти</button>
                   </div>
                 </div>
-                <p className="path-scene-text">{dragon.meetText}</p>
-                <div className="fab-bar">
-                  <button className="btn btn--primary btn--block" onClick={() => chooseDragon(true)}>Подружиться</button>
-                  <button className="btn btn--ghost" onClick={() => chooseDragon(false)}>Поклониться и уйти</button>
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {step.kind === 'crossroad' && (
               <div className="path-card rise">
@@ -322,7 +327,7 @@ function pickFrom(pool: string[], key: string): string {
   return pool[h % pool.length];
 }
 
-function stepArtUrl(step: { kind: string; event?: PathEvent; familiarId?: string; interaction?: { familiarId: string } }, identityId: string): string {
+function stepArtUrl(step: { kind: string; event?: PathEvent; familiarId?: string; interaction?: { familiarId: string }; dragonId?: string }, identityId: string): string {
   if (step.kind === 'event' && step.event) {
     if (identityId === 'city' && step.event.tracks?.includes('city') && !step.event.art.startsWith('path-city-')) {
       return pathArtFor(pickFrom(cityPathArt, step.event.id));
@@ -331,7 +336,7 @@ function stepArtUrl(step: { kind: string; event?: PathEvent; familiarId?: string
   }
   if (step.kind === 'familiar' && step.familiarId) return familiarArtById[step.familiarId] ?? pathArtFor('path-familiar');
   if (step.kind === 'familiarEvent' && step.interaction) return familiarArtById[step.interaction.familiarId] ?? pathArtFor('path-familiar');
-  if (step.kind === 'dragon') return pathArtFor('path-dragon');
+  if (step.kind === 'dragon') return pathArtFor(dragonById(step.dragonId)?.art ?? 'path-dragon');
   if (step.kind === 'crossroad') return pathArtFor('path-crossroad');
   if (identityId === 'city') return pathArtFor(pickFrom(cityPathArt, 'quiet-city'));
   return pathArtFor('path-quiet');

@@ -152,7 +152,8 @@ export interface PathState {
   trinkets: string[];                 // обереги/безделушки в котомке
   seen: string[];                     // пройденные сцены (чтобы не повторялись)
   log: PathLogEntry[];                // летопись пути
-  dragon?: boolean;                   // подружилась с драконом (отдельно от фамильяра, виден в профиле)
+  dragon?: boolean;                   // legacy: подружилась хотя бы с одним драконом
+  dragonFriends?: string[];           // id драконов, с которыми подружилась (виден в профиле)
   forcedSteps?: ForcedStep[];         // очередь гарантированных шагов (подарок-извинение)
   bonusSteps?: number;                // доп. шаги сверх дневного лимита (не считаются в stepsToday)
   famCooldownUntil?: number;          // до какого step фамильяры не встречаются (после принятия — 4 шага)

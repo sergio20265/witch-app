@@ -5,6 +5,25 @@ It is meant as a handoff map for future Claude Code sessions.
 
 ## Changelog
 
+### 2.12 (2026-06-29) — Claude Code: familiar roster, dragons, scenes
+
+- **+16 familiars** (`src/data/path.ts`): a second per witch type (panther, unicorn,
+  badger, mouse, redpanda, whitecat, meerkat, otter, swallow, firefly, spider,
+  boar, bat) plus 3 neutral universals (capybara, tabby, ferret). Portraits +
+  icons added. Universals carry no `familiarAffinity` entry and are treated as
+  neutral (own/foreign/neutral classification in `familiarInfluence`,
+  `activeFamiliars` validates by id, profile shows "вольный спутник").
+- **4 dragons** instead of one (`dragons[]` + `dragonById`): mountain/forest/
+  storm/mist, each with own art (`path-dragon`..`path-dragon4`). Encounters pick
+  an un-befriended dragon; `PathState.dragonFriends[]` collects them (legacy
+  `dragon` bool still honored). Profile lists all dragon friends.
+- **Skill mastery tiers** (2.11) retained.
+- **6 universal scenes + 26 track-dedicated scenes** (2 per track) in
+  `src/data/pathEvents.ts`, each with unique art (`path-<track>-1x`).
+- **13 signature amulets** — one per witch type, granted only in that track's
+  scene-1 (`sig-<type>` in `trinkets`).
+- Bump 2.11 -> 2.12 (versionCode 22).
+
 ### 2.11 (2026-06-28) — Claude Code: balance fixes + content
 
 - **Fixed familiar over-spawn (was a regression of the original complaint).**
