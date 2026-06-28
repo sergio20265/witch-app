@@ -3,6 +3,7 @@ import { PageBackground } from '../components/PageBackground';
 import { PageHeader } from '../components/PageHeader';
 import { Sheet } from '../components/Sheet';
 import { PhotoField } from '../components/PhotoField';
+import { Photo } from '../components/Photo';
 import { useLocalStorage, newId } from '../storage/useLocalStorage';
 import type { Memory } from '../storage/types';
 import { formatShortDate } from '../lib/date';
@@ -52,7 +53,7 @@ export function Memories() {
           <div className="memory-grid">
             {items.map((m) => (
               <button key={m.id} className="memory-thumb" onClick={() => setView(m)}>
-                <img src={m.photo} alt={m.caption ?? ''} />
+                <Photo src={m.photo} alt={m.caption ?? ''} />
                 {m.caption && <span className="memory-thumb__caption">{m.caption}</span>}
               </button>
             ))}
@@ -64,7 +65,7 @@ export function Memories() {
       {/* Просмотр */}
       {view && (
         <Sheet title={view.caption ?? formatShortDate(view.date)} onClose={() => setView(null)}>
-          <img src={view.photo} alt="" style={{ width: '100%', borderRadius: 'var(--radius)', marginBottom: 12 }} />
+          <Photo src={view.photo} style={{ width: '100%', borderRadius: 'var(--radius)', marginBottom: 12 }} />
           {view.caption && <p style={{ margin: '0 0 12px' }}>{view.caption}</p>}
           <p className="muted" style={{ fontSize: '0.85rem' }}>{formatShortDate(view.date)}</p>
           <div className="spacer" />

@@ -37,21 +37,4 @@ export function greeting(d = new Date()): string {
   return 'Добрый вечер';
 }
 
-/** Текущая фаза луны: эмодзи + русское название. */
-export function moonPhase(d = new Date()): { emoji: string; name: string } {
-  // Синодический месяц = 29.53059 дней. Опорная новолуния: 6 янв 2000 UTC.
-  const KNOWN_NEW = Date.UTC(2000, 0, 6);
-  const CYCLE = 29.53059;
-  const elapsed = (d.getTime() - KNOWN_NEW) / 86_400_000;
-  const phase = ((elapsed % CYCLE) + CYCLE) % CYCLE; // 0..29.53
-
-  if (phase < 1.85)  return { emoji: '🌑', name: 'Новолуние' };
-  if (phase < 7.38)  return { emoji: '🌒', name: 'Растущий серп' };
-  if (phase < 9.22)  return { emoji: '🌓', name: 'Первая четверть' };
-  if (phase < 14.77) return { emoji: '🌔', name: 'Растущая луна' };
-  if (phase < 16.61) return { emoji: '🌕', name: 'Полнолуние' };
-  if (phase < 22.15) return { emoji: '🌖', name: 'Убывающая луна' };
-  if (phase < 23.99) return { emoji: '🌗', name: 'Последняя четверть' };
-  if (phase < 29.53) return { emoji: '🌘', name: 'Убывающий серп' };
-  return { emoji: '🌑', name: 'Новолуние' };
-}
+// Фазы луны переехали в lib/moon.ts (полноценный лунный календарь).

@@ -19,6 +19,11 @@ import { Bookshelf } from './screens/Bookshelf';
 import { Aesthetic } from './screens/Aesthetic';
 import { Ingredients } from './screens/Ingredients';
 import { PersonalCalendar } from './screens/PersonalCalendar';
+import { MoonCalendar } from './screens/MoonCalendar';
+import { RuneOfDay } from './screens/RuneOfDay';
+import { Tarot } from './screens/Tarot';
+import { MyPath } from './screens/MyPath';
+import { MyProfile } from './screens/MyProfile';
 import { Onboarding } from './screens/Onboarding';
 import { readStore } from './storage/useLocalStorage';
 
@@ -50,6 +55,11 @@ export default function App() {
           <Route path="aesthetic" element={<Aesthetic />} />
           <Route path="ingredients" element={<Ingredients />} />
           <Route path="my-calendar" element={<PersonalCalendar />} />
+          <Route path="moon" element={<MoonCalendar />} />
+          <Route path="rune" element={<RuneOfDay />} />
+          <Route path="tarot" element={<Tarot />} />
+          <Route path="path" element={<MyPath />} />
+          <Route path="profile" element={<MyProfile />} />
           <Route path="more" element={<More />} />
           <Route path="settings" element={<Settings />} />
         </Route>

@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from 'react-router-dom';
 import { BottomNav } from './BottomNav';
+import { SabbatGreeting } from './SabbatGreeting';
 import { bgFor } from '../assets';
 import { useTheme } from '../lib/ThemeContext';
 import './app-shell.css';
@@ -22,11 +23,13 @@ export function AppShell() {
         aria-hidden
       />
       <div className="shell__veil" aria-hidden />
+      <div className="shell__ambient" aria-hidden />
       <main className="shell__scroll" key={pathname}>
         <Outlet />
         <div className="shell__nav-spacer" />
       </main>
       <BottomNav />
+      <SabbatGreeting />
     </div>
   );
 }

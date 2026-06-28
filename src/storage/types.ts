@@ -53,6 +53,11 @@ export interface CardHistoryItem {
   cardId: string;
 }
 
+export interface RuneHistoryItem {
+  date: string;       // ISO yyyy-mm-dd
+  runeId: string;
+}
+
 export interface UserRecipe {
   id: string;
   name: string;
@@ -95,6 +100,51 @@ export interface Reminder {
   title: string;
   date: string;       // ISO
   enabled: boolean;
+}
+
+// ===== Таро: расклады =====
+export interface TarotCard {
+  id: string;
+  num: number;        // порядковый номер позиции (0 — особая карта, напр. талисман)
+  label: string;      // вопрос / значение позиции
+  x: number;          // центр карты, % ширины полотна (0..100)
+  y: number;          // центр карты, % высоты полотна (0..100)
+  photo?: string;     // dataURL вытянутой карты
+  meaning?: string;   // значение карты (текст с самой карты)
+  note?: string;      // заметка по позиции
+}
+
+export interface TarotSpread {
+  id: string;
+  title: string;
+  subtitle?: string;
+  kind: 'custom' | 'template';
+  templateId?: string;
+  cards: TarotCard[];
+  summary?: string;   // итог расклада: мысли пользователя
+  createdAt: string;  // ISO
+}
+
+// ===== Моя тропинка (мини-игра-странствие) =====
+export interface PathLogEntry {
+  date: string;       // ISO
+  eventId: string;
+  choice: string;     // выбранный ответ
+  outcome: string;    // что вышло
+}
+
+export interface PathState {
+  step: number;                       // сколько шагов пройдено всего
+  lastStepDate?: string;              // yyyy-mm-dd последнего шага
+  stepsToday: number;                 // шагов сделано сегодня (лимит — STEPS_PER_DAY)
+  affinity: Record<string, number>;   // склонности по типажам (id → очки)
+  familiar?: string;                  // выбранный фамильяр (id вида 'cat')
+  familiarName?: string;              // данное ему имя (необязательно)
+  skills: string[];                   // перенятые ремёсла (id типажей)
+  trinkets: string[];                 // обереги/безделушки в котомке
+  seen: string[];                     // пройденные сцены (чтобы не повторялись)
+  log: PathLogEntry[];                // летопись пути
+  forcedStep?: 'gift';                // подарок-извинение: фамильяр / редкое событие / обычный рандом
 }
 
 // ===== Воспоминания =====

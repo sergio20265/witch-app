@@ -33,10 +33,53 @@ import card4 from './cards/card-4.webp';
 import card5 from './cards/card-5.webp';
 import card6 from './cards/card-6.webp';
 import card7 from './cards/card-7.webp';
+import card26 from './cards/card-26.webp';
+import card28 from './cards/card-28.webp';
 import card30 from './cards/card-30.webp';
 import card31 from './cards/card-31.webp';
 import card32 from './cards/card-32.webp';
 import card33 from './cards/card-33.webp';
+import card34 from './cards/card-34.webp';
+import card35 from './cards/card-35.webp';
+import card36 from './cards/card-36.webp';
+import card37 from './cards/card-37.webp';
+import card38 from './cards/card-38.webp';
+import card39 from './cards/card-39.webp';
+import card40 from './cards/card-40.webp';
+import card41 from './cards/card-41.webp';
+import card42 from './cards/card-42.webp';
+import card43 from './cards/card-43.webp';
+import card44 from './cards/card-44.webp';
+import card45 from './cards/card-45.webp';
+import card50 from './cards/card-50.webp';
+import card51 from './cards/card-51.webp';
+import card52 from './cards/card-52.webp';
+import card53 from './cards/card-53.webp';
+
+import rune1 from './runes/rune-1.webp';
+import rune2 from './runes/rune-2.webp';
+import rune3 from './runes/rune-3.webp';
+import rune4 from './runes/rune-4.webp';
+import rune5 from './runes/rune-5.webp';
+import rune6 from './runes/rune-6.webp';
+import rune7 from './runes/rune-7.webp';
+import rune8 from './runes/rune-8.webp';
+import rune9 from './runes/rune-9.webp';
+import rune10 from './runes/rune-10.webp';
+import rune11 from './runes/rune-11.webp';
+import rune12 from './runes/rune-12.webp';
+import rune13 from './runes/rune-13.webp';
+import rune14 from './runes/rune-14.webp';
+import rune15 from './runes/rune-15.webp';
+import rune16 from './runes/rune-16.webp';
+import rune17 from './runes/rune-17.webp';
+import rune18 from './runes/rune-18.webp';
+import rune19 from './runes/rune-19.webp';
+import rune20 from './runes/rune-20.webp';
+import rune21 from './runes/rune-21.webp';
+import rune22 from './runes/rune-22.webp';
+import rune23 from './runes/rune-23.webp';
+import rune25 from './runes/rune-25.webp';
 
 import wheelYule from './wheel/yule.webp';
 import wheelImbolc from './wheel/imbolc.webp';
@@ -62,16 +105,70 @@ export const cardArtById: Record<string, string> = {
   'card-5': card5,
   'card-6': card6,
   'card-7': card7,
+  'card-26': card26,
+  'card-28': card28,
   'card-30': card30,
   'card-31': card31,
   'card-32': card32,
   'card-33': card33,
+  'card-34': card34,
+  'card-35': card35,
+  'card-36': card36,
+  'card-37': card37,
+  'card-38': card38,
+  'card-39': card39,
+  'card-40': card40,
+  'card-41': card41,
+  'card-42': card42,
+  'card-43': card43,
+  'card-44': card44,
+  'card-45': card45,
+  'card-50': card50,
+  'card-51': card51,
+  'card-52': card52,
+  'card-53': card53,
 };
+
+/** Прямое соответствие rune_id → URL изображения руны. */
+export const runeArtById: Record<string, string> = {
+  'rune-1': rune1,   'rune-2': rune2,   'rune-3': rune3,   'rune-4': rune4,
+  'rune-5': rune5,   'rune-6': rune6,   'rune-7': rune7,   'rune-8': rune8,
+  'rune-9': rune9,   'rune-10': rune10, 'rune-11': rune11, 'rune-12': rune12,
+  'rune-13': rune13, 'rune-14': rune14, 'rune-15': rune15, 'rune-16': rune16,
+  'rune-17': rune17, 'rune-18': rune18, 'rune-19': rune19, 'rune-20': rune20,
+  'rune-21': rune21, 'rune-22': rune22, 'rune-23': rune23, 'rune-25': rune25,
+};
+
+/** Арт сцен «Моей тропинки»: src/assets/path/path-*.webp → ключ по art-id сцены. */
+const pathModules = import.meta.glob('./path/*.webp', { eager: true, import: 'default' }) as Record<string, string>;
+export const pathArtById: Record<string, string> = Object.fromEntries(
+  Object.entries(pathModules).map(([p, url]) => [p.slice(p.lastIndexOf('/') + 1, -'.webp'.length), url]),
+);
+
+/** Портреты фамильяров: src/assets/familiars/familiar-<id>.webp → ключ по id ('cat'). */
+const familiarModules = import.meta.glob('./familiars/familiar-*.webp', { eager: true, import: 'default' }) as Record<string, string>;
+export const familiarArtById: Record<string, string> = Object.fromEntries(
+  Object.entries(familiarModules).map(([p, url]) => [p.slice(p.lastIndexOf('/familiar-') + '/familiar-'.length, -'.webp'.length), url]),
+);
+
+/** Маленькие иконки фамильяров на прозрачном фоне: familiars/icon-<id>.webp → ключ по id. */
+const familiarIconModules = import.meta.glob('./familiars/icon-*.webp', { eager: true, import: 'default' }) as Record<string, string>;
+export const familiarIconById: Record<string, string> = Object.fromEntries(
+  Object.entries(familiarIconModules).map(([p, url]) => [p.slice(p.lastIndexOf('/icon-') + '/icon-'.length, -'.webp'.length), url]),
+);
+
+/** Картинка сцены тропинки по её art-id; до появления арта — фон из пула. */
+export function pathArtFor(key: string): string {
+  if (pathArtById[key]) return pathArtById[key];
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return backgrounds[h % backgrounds.length];
+}
 
 // Массив сохраняем для обратной совместимости (bgFor в рецептах и т.д.)
 const cardArt: string[] = [
   card1, card2, card3, card4, card5, card6, card7,
-  card30, card31, card32, card33,
+  card26, card28, card30, card31, card32, card33,
 ];
 
 /** Логотип праздника колеса года по его id. */
@@ -92,6 +189,11 @@ const ROUTE_BG: Record<string, string> = {
   '/journal':      bg14,  // Дневник
   '/wheel':        bg11,  // Колесо года
   '/card':         bg17,  // Карта дня
+  '/moon':         bg13,  // Лунный календарь
+  '/rune':         bg20,  // Руна дня
+  '/tarot':        bg21,  // Таро
+  '/path':         bg05,  // Моя тропинка
+  '/profile':      bg24,  // Профиль
   '/archive':      bg10,  // Архив карт
   '/wishes':       bg12,  // Книга желаний
   '/recipes':      bg15,  // Рецепты

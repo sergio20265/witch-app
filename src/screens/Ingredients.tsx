@@ -3,6 +3,7 @@ import { PageBackground } from '../components/PageBackground';
 import { PageHeader } from '../components/PageHeader';
 import { Sheet } from '../components/Sheet';
 import { PhotoField } from '../components/PhotoField';
+import { Photo } from '../components/Photo';
 import { useLocalStorage, newId } from '../storage/useLocalStorage';
 import type { Ingredient } from '../storage/types';
 
@@ -82,7 +83,7 @@ export function Ingredients() {
             {shown.map((ing) => (
               <button key={ing.id} className="list-card" onClick={() => setView(ing)} style={{ textAlign: 'left' }}>
                 {ing.photo ? (
-                  <img className="list-card__thumb" src={ing.photo} alt={ing.name} />
+                  <Photo className="list-card__thumb" src={ing.photo} alt={ing.name} />
                 ) : (
                   <span className="list-card__glyph">🌿</span>
                 )}
@@ -101,7 +102,7 @@ export function Ingredients() {
       {/* Просмотр */}
       {view && (
         <Sheet title={view.name} onClose={() => setView(null)}>
-          {view.photo && <img src={view.photo} alt="" style={{ width: '100%', borderRadius: 'var(--radius)', marginBottom: 14 }} />}
+          {view.photo && <Photo src={view.photo} style={{ width: '100%', borderRadius: 'var(--radius)', marginBottom: 14 }} />}
           <div className="row row--wrap" style={{ marginBottom: 10 }}>
             <span className="chip">{view.category}</span>
             {view.mood && <span className="chip">{view.mood}</span>}

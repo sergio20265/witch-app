@@ -3,6 +3,7 @@ import { PageBackground } from '../components/PageBackground';
 import { PageHeader } from '../components/PageHeader';
 import { Sheet } from '../components/Sheet';
 import { PhotoField } from '../components/PhotoField';
+import { Photo } from '../components/Photo';
 import { useLocalStorage, newId } from '../storage/useLocalStorage';
 import type { PersonalEvent } from '../storage/types';
 
@@ -177,7 +178,7 @@ export function PersonalCalendar() {
       {view && (
         <Sheet title={view.title} onClose={() => setView(null)}>
           {view.photo && (
-            <img src={view.photo} alt="" style={{ width: '100%', borderRadius: 'var(--radius)', marginBottom: 14 }} />
+            <Photo src={view.photo} style={{ width: '100%', borderRadius: 'var(--radius)', marginBottom: 14 }} />
           )}
           <div className="row row--wrap" style={{ marginBottom: 10 }}>
             <span className="chip">{view.category}</span>
@@ -309,7 +310,7 @@ function EventCard({ ev, onTap }: { ev: PersonalEvent; onTap: () => void }) {
   return (
     <button className={'list-card event-card' + (isToday ? ' event-card--today' : '')} onClick={onTap} style={{ textAlign: 'left' }}>
       {ev.photo ? (
-        <img className="list-card__thumb" src={ev.photo} alt={ev.title} />
+        <Photo className="list-card__thumb" src={ev.photo} alt={ev.title} />
       ) : (
         <span className="list-card__glyph event-glyph">{categoryGlyph(ev.category)}</span>
       )}

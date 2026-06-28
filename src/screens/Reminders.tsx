@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PageBackground } from '../components/PageBackground';
 import { PageHeader } from '../components/PageHeader';
 import { Sheet } from '../components/Sheet';
@@ -6,6 +6,9 @@ import { nextSabbat, formatSabbatDate } from '../data/wheelOfYear';
 import { useLocalStorage, newId } from '../storage/useLocalStorage';
 import type { Reminder } from '../storage/types';
 import { formatShortDate } from '../lib/date';
+import {
+  ensureNotifPermission, notifPermission, rescheduleNotifications, type MoonReminders,
+} from '../lib/notifications';
 
 // Атмосферные тексты для авто-напоминаний о ближайшем празднике.
 function whisper(name: string, days: number): string {
@@ -16,16 +19,34 @@ function whisper(name: string, days: number): string {
 
 export function Reminders() {
   const { sabbat, daysUntil } = nextSabbat();
-  // Настройки авто-напоминаний (за 7/3/0 дней) — структура данных для MVP.
+  // Настройки авто-напоминаний (за 7/3/0 дней).
   const [auto, setAuto] = useLocalStorage('reminderAuto', { d7: true, d3: true, d0: true });
+  const [moon, setMoon] = useLocalStorage<MoonReminders>('reminderMoon', { full: false, new: false });
   const [custom, setCustom] = useLocalStorage<Reminder[]>('reminders', []);
   const [draft, setDraft] = useState<Reminder | null>(null);
+  const [perm, setPerm] = useState<string>('web');
+
+  // Текущий статус разрешения на уведомления.
+  useEffect(() => { notifPermission().then(setPerm); }, []);
+
+  // Любое изменение настроек → пересобрать расписание (no-op в вебе).
+  useEffect(() => {
+    if (perm === 'granted') rescheduleNotifications();
+  }, [auto, moon, custom, perm]);
+
+  async function requestPerm() {
+    const ok = await ensureNotifPermission();
+    setPerm(ok ? 'granted' : await notifPermission());
+  }
 
   const autoRows = [
     { key: 'd7' as const, days: 7, label: 'За 7 дней' },
     { key: 'd3' as const, days: 3, label: 'За 3 дня' },
     { key: 'd0' as const, days: 0, label: 'В день праздника' },
   ];
+
+  const native = perm !== 'web';
+  const needsPerm = native && perm !== 'granted';
 
   function saveDraft() {
     if (!draft) return;
@@ -40,6 +61,21 @@ export function Reminders() {
       <PageBackground k="reminders" />
       <div className="page">
         <PageHeader back eyebrow="Шёпот леса" title="Напоминания" subtitle={`Ближайший праздник — ${sabbat.name}, ${formatSabbatDate(sabbat)}`} />
+
+        {needsPerm && (
+          <button className="perm-banner card rise" onClick={requestPerm}>
+            <span className="perm-banner__bell">🔔</span>
+            <div style={{ flex: 1 }}>
+              <strong>Разрешить уведомления</strong>
+              <p className="muted" style={{ margin: '4px 0 0', fontSize: '0.85rem' }}>
+                {perm === 'denied'
+                  ? 'Уведомления выключены в настройках телефона — включи их там, чтобы лес мог шепнуть.'
+                  : 'Чтобы лес мог тихо напомнить о празднике, фазе луны или твоём деле.'}
+              </p>
+            </div>
+            <span className="faint" style={{ fontSize: '1.2rem' }}>→</span>
+          </button>
+        )}
 
         <h2 className="section-title">О празднике колеса</h2>
         <div className="stack stack--tight">
@@ -56,8 +92,31 @@ export function Reminders() {
           ))}
         </div>
         <p className="faint" style={{ fontSize: '0.75rem', marginTop: 10 }}>
-          {daysUntil === 0 ? 'Праздник сегодня 🌙' : `До праздника ${daysUntil} дн.`} · уведомления подключатся на устройстве позже.
+          {daysUntil === 0 ? 'Праздник сегодня 🌙' : `До праздника ${daysUntil} дн.`}
+          {native ? ' · напоминания приходят утром (около 9:00)' : ' · уведомления работают в приложении на телефоне'}
         </p>
+
+        <h2 className="section-title">Луна</h2>
+        <div className="stack stack--tight">
+          <div className="card" style={{ padding: 14 }}>
+            <div className="spread">
+              <div>
+                <strong>🌕 Полнолуние</strong>
+                <p className="muted" style={{ margin: '4px 0 0', fontSize: '0.85rem' }}>Напомнить утром в день полнолуния.</p>
+              </div>
+              <Toggle on={moon.full} onChange={(v) => setMoon({ ...moon, full: v })} />
+            </div>
+          </div>
+          <div className="card" style={{ padding: 14 }}>
+            <div className="spread">
+              <div>
+                <strong>🌑 Новолуние</strong>
+                <p className="muted" style={{ margin: '4px 0 0', fontSize: '0.85rem' }}>Тихий час намерений в начале лунного круга.</p>
+              </div>
+              <Toggle on={moon.new} onChange={(v) => setMoon({ ...moon, new: v })} />
+            </div>
+          </div>
+        </div>
 
         <h2 className="section-title">Свои напоминания</h2>
         {custom.length === 0 ? (

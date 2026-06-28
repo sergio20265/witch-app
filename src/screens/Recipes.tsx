@@ -3,6 +3,7 @@ import { PageBackground } from '../components/PageBackground';
 import { PageHeader } from '../components/PageHeader';
 import { Sheet } from '../components/Sheet';
 import { PhotoField } from '../components/PhotoField';
+import { Photo } from '../components/Photo';
 import { recipes as seedRecipes, defaultRecipeCategories } from '../data/recipes';
 import { seasonNames, type SeasonId } from '../data/wheelOfYear';
 import { useLocalStorage, newId } from '../storage/useLocalStorage';
@@ -22,11 +23,29 @@ export function Recipes() {
   const [ingText, setIngText] = useState('');
   const [newCatText, setNewCatText] = useState('');
   const [showCatInput, setShowCatInput] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState('');
+  const [catFilter, setCatFilter] = useState<string | null>(null);
+
+  function toggleSearch() {
+    setSearching((s) => { if (s) { setQuery(''); setCatFilter(null); } return !s; });
+  }
 
   const all: UserRecipe[] = [
     ...mine,
     ...seedRecipes.map((r) => ({ ...r, season: r.season as string })),
   ];
+
+  // Категории, реально встречающиеся в рецептах — для тихого ряда фильтров.
+  const presentCats = allCats.filter((c) => all.some((r) => r.category === c));
+
+  const q = query.trim().toLowerCase();
+  const visible = all.filter((r) => {
+    if (catFilter && r.category !== catFilter) return false;
+    if (!q) return true;
+    return [r.name, r.description, r.category, r.mood, seasonLabel(r.season), ...r.ingredients]
+      .some((v) => v?.toLowerCase().includes(q));
+  });
 
   const blank = (): UserRecipe => ({
     id: newId(),
@@ -75,14 +94,44 @@ export function Recipes() {
         <PageHeader
           eyebrow="Личные уютные рецепты"
           title="Травник и чаи"
-          action={<button className="chip chip--active" onClick={() => { setDraft(blank()); setIngText(''); }}>＋ рецепт</button>}
+          action={
+            <div className="row" style={{ gap: 8 }}>
+              <button className={'chip quiet-search__toggle' + (searching ? ' is-on' : '')} aria-label="Поиск" onClick={toggleSearch}>🔍</button>
+              <button className="chip chip--active" onClick={() => { setDraft(blank()); setIngText(''); }}>＋ рецепт</button>
+            </div>
+          }
         />
 
+        {searching && (
+          <>
+            <div className="quiet-search">
+              <input
+                className="field quiet-search__input"
+                placeholder="искать по названию, травам, сезону…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                autoFocus
+              />
+              {query && <button className="quiet-search__clear" onClick={() => setQuery('')} aria-label="Очистить">✕</button>}
+            </div>
+            {presentCats.length > 1 && (
+              <div className="quiet-filters">
+                <button className={'chip' + (catFilter === null ? ' chip--active' : '')} onClick={() => setCatFilter(null)}>все</button>
+                {presentCats.map((c) => (
+                  <button key={c} className={'chip' + (catFilter === c ? ' chip--active' : '')} onClick={() => setCatFilter(catFilter === c ? null : c)}>{c}</button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
         <div className="stack">
-          {all.map((r) => (
+          {visible.length === 0 ? (
+            <p className="muted center" style={{ marginTop: 22 }}>В травнике ничего не нашлось.</p>
+          ) : visible.map((r) => (
             <button key={r.id} className="list-card" onClick={() => setOpen(r)} style={{ textAlign: 'left' }}>
               {r.photo
-                ? <img className="list-card__thumb" src={r.photo} alt="" />
+                ? <Photo className="list-card__thumb" src={r.photo} />
                 : <span className="list-card__glyph">🫖</span>}
               <div style={{ flex: 1 }}>
                 <div className="meta">{r.category} · {seasonLabel(r.season)}</div>
@@ -103,7 +152,7 @@ export function Recipes() {
       {open && (
         <Sheet title={open.name} onClose={() => setOpen(null)}>
           {open.photo
-            ? <img className="detail-art" src={open.photo} alt="" />
+            ? <Photo className="detail-art" src={open.photo} />
             : isMine(open.id) ? null : <img className="detail-art" src={bgFor('recipe-' + open.id)} alt="" />
           }
           <div className="row row--wrap" style={{ marginBottom: 12 }}>

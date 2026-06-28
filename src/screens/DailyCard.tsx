@@ -8,8 +8,13 @@ import { useLocalStorage } from '../storage/useLocalStorage';
 import type { CardHistoryItem } from '../storage/types';
 import { todayISO, formatLongDate } from '../lib/date';
 import { shareCard } from '../lib/shareCard';
+import { identityFor, cardLensFor } from '../data/identities';
+import { readStore } from '../storage/useLocalStorage';
 
 export function DailyCard() {
+  const pathFlavor = readStore<boolean>('pathFlavor', true);
+  const identity = identityFor(readStore<string>('userIdentity', ''));
+  const lens = pathFlavor ? cardLensFor(identity.id) : '';
   const card = cardForDate();
   const today = todayISO();
   const [history, setHistory] = useLocalStorage<CardHistoryItem[]>('cardHistory', []);
@@ -51,7 +56,7 @@ export function DailyCard() {
   return (
     <>
       <PageBackground k="card" />
-      <div className="page">
+      <div className="page" style={pathFlavor ? { ['--path-accent' as any]: identity.accent } : undefined}>
         <PageHeader
           eyebrow="Послание дня"
           title="Карта дня"
@@ -96,6 +101,12 @@ export function DailyCard() {
                 </button>
                 <span className="chip">{cardCategoryNames[card.category]}</span>
               </div>
+
+              {lens && (
+                <p className="card-lens">
+                  <span className="card-lens__mark">{identity.glyph}</span> {lens}
+                </p>
+              )}
             </div>
 
             <p className="muted center" style={{ marginTop: 16, fontSize: '0.85rem' }}>

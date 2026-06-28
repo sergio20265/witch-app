@@ -3,6 +3,7 @@ import { PageBackground } from '../components/PageBackground';
 import { PageHeader } from '../components/PageHeader';
 import { Sheet } from '../components/Sheet';
 import { PhotoField } from '../components/PhotoField';
+import { Photo } from '../components/Photo';
 import { useLocalStorage, newId } from '../storage/useLocalStorage';
 import type { JournalEntry } from '../storage/types';
 import { wheelOfYear } from '../data/wheelOfYear';
@@ -24,13 +25,34 @@ export function Journal() {
   const [entries, setEntries] = useLocalStorage<JournalEntry[]>('journal', []);
   const [userMoods, setUserMoods] = useLocalStorage<string[]>('journalMoods', []);
   const [userFeelings, setUserFeelings] = useLocalStorage<string[]>('journalFeelings', []);
+  const [tagPool, setTagPool] = useLocalStorage<string[]>('journalTags', []);
 
   const allMoods = [...DEFAULT_MOODS, ...userMoods.filter((m) => !DEFAULT_MOODS.includes(m))];
   const allFeelings = [...DEFAULT_FEELINGS, ...userFeelings.filter((f) => !DEFAULT_FEELINGS.includes(f))];
 
+  // Все теги: сохранённый список + те, что уже встречаются в записях.
+  const allTags = [...new Set([...tagPool, ...entries.flatMap((e) => e.tags)])];
+
   const [view, setView] = useState<JournalEntry | null>(null);
   const [draft, setDraft] = useState<JournalEntry | null>(null);
   const [tagText, setTagText] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
+  function toggleSearch() {
+    setSearching((s) => { if (s) { setQuery(''); setSelectedTags([]); } return !s; });
+  }
+  function toggleFilterTag(t: string) {
+    setSelectedTags((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
+  }
+
+  const q = query.trim().toLowerCase();
+  const visible = entries.filter((e) => {
+    if (selectedTags.length && !selectedTags.some((t) => e.tags.includes(t))) return false;
+    if (q && ![e.title, e.body, e.mood, e.feeling, ...e.tags].some((v) => v?.toLowerCase().includes(q))) return false;
+    return true;
+  });
   const [newMoodText, setNewMoodText] = useState('');
   const [newFeelingText, setNewFeelingText] = useState('');
   const [showMoodInput, setShowMoodInput] = useState(false);
@@ -44,6 +66,9 @@ export function Journal() {
     if (!draft.title.trim() && !draft.body.trim()) { setDraft(null); return; }
     const exists = entries.some((e) => e.id === draft.id);
     setEntries(exists ? entries.map((e) => (e.id === draft.id ? draft : e)) : [draft, ...entries]);
+    // Запоминаем теги записи в общий список, чтобы выбирать их в будущем.
+    const fresh = draft.tags.filter((t) => !tagPool.includes(t));
+    if (fresh.length) setTagPool([...tagPool, ...fresh]);
     setDraft(null);
   }
 
@@ -56,7 +81,12 @@ export function Journal() {
   function addTag() {
     const t = tagText.trim();
     if (draft && t && !draft.tags.includes(t)) setDraft({ ...draft, tags: [...draft.tags, t] });
+    if (t && !tagPool.includes(t)) setTagPool([...tagPool, t]);
     setTagText('');
+  }
+  function toggleDraftTag(t: string) {
+    if (!draft) return;
+    setDraft({ ...draft, tags: draft.tags.includes(t) ? draft.tags.filter((x) => x !== t) : [...draft.tags, t] });
   }
 
   function addMood() {
@@ -82,8 +112,37 @@ export function Journal() {
         <PageHeader
           eyebrow="Личные записи"
           title="Дневник"
-          action={<button className="chip chip--active" onClick={openNew}>＋ запись</button>}
+          action={
+            <div className="row" style={{ gap: 8 }}>
+              {entries.length > 0 && (
+                <button className={'chip quiet-search__toggle' + (searching ? ' is-on' : '')} aria-label="Поиск" onClick={toggleSearch}>🔍</button>
+              )}
+              <button className="chip chip--active" onClick={openNew}>＋ запись</button>
+            </div>
+          }
         />
+
+        {searching && (
+          <>
+            <div className="quiet-search">
+              <input
+                className="field quiet-search__input"
+                placeholder="искать по записям, тегам, настроению…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                autoFocus
+              />
+              {query && <button className="quiet-search__clear" onClick={() => setQuery('')} aria-label="Очистить">✕</button>}
+            </div>
+            {allTags.length > 0 && (
+              <div className="quiet-filters">
+                {allTags.map((t) => (
+                  <button key={t} className={'chip' + (selectedTags.includes(t) ? ' chip--active' : '')} onClick={() => toggleFilterTag(t)}>#{t}</button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
 
         {entries.length === 0 ? (
           <div className="empty">
@@ -92,12 +151,14 @@ export function Journal() {
             <div className="spacer" />
             <button className="btn btn--ghost" onClick={openNew}>Написать запись</button>
           </div>
+        ) : visible.length === 0 ? (
+          <p className="muted center" style={{ marginTop: 22 }}>На этих страницах ничего не нашлось.</p>
         ) : (
           <div className="stack">
-            {entries.map((e) => (
+            {visible.map((e) => (
               <button key={e.id} className="list-card" onClick={() => setView(e)} style={{ textAlign: 'left' }}>
                 {e.photo ? (
-                  <img className="list-card__thumb" src={e.photo} alt="" />
+                  <Photo className="list-card__thumb" src={e.photo} />
                 ) : (
                   <span className="list-card__glyph">🍃</span>
                 )}
@@ -126,7 +187,7 @@ export function Journal() {
       {view && !draft && (
         <Sheet title={view.title || 'Запись дневника'} onClose={() => setView(null)}>
           {view.photo && (
-            <img src={view.photo} alt="" style={{ width: '100%', borderRadius: 'var(--radius)', marginBottom: 14 }} />
+            <Photo src={view.photo} style={{ width: '100%', borderRadius: 'var(--radius)', marginBottom: 14 }} />
           )}
 
           <div className="meta" style={{ marginBottom: 8 }}>
@@ -239,20 +300,21 @@ export function Journal() {
           <div className="tag-input-row">
             <input
               className="field"
-              placeholder="добавить тег"
+              placeholder="новый тег"
               value={tagText}
               onChange={(e) => setTagText(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addTag()}
             />
             <button className="btn btn--ghost" onClick={addTag}>＋</button>
           </div>
-          {draft.tags.length > 0 && (
-            <div className="row row--wrap" style={{ marginTop: 8 }}>
-              {draft.tags.map((t) => (
-                <button key={t} className="chip"
-                  onClick={() => setDraft({ ...draft, tags: draft.tags.filter((x) => x !== t) })}>
-                  #{t} ✕
-                </button>
+          {allTags.length > 0 && (
+            <div className="text-chips" style={{ marginTop: 8 }}>
+              {allTags.map((t) => (
+                <button
+                  key={t}
+                  className={'chip' + (draft.tags.includes(t) ? ' chip--active' : '')}
+                  onClick={() => toggleDraftTag(t)}
+                >#{t}</button>
               ))}
             </div>
           )}

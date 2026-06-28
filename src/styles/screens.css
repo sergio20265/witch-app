@@ -74,6 +74,107 @@
   color: var(--gold-soft);
 }
 
+.season-pill--link { cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+.season-pill--link:active { transform: scale(0.97); }
+
+/* Мини-полоска фаз луны на главной */
+.moon-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin: 14px auto 0;
+  max-width: 320px;
+  padding: 8px 6px;
+  border-radius: 999px;
+  background: rgba(15, 26, 20, 0.55);
+  border: 1px solid var(--border);
+}
+.moon-week__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 0;
+  border-radius: 12px;
+}
+.moon-week__day.is-today { background: rgba(201, 164, 92, 0.14); }
+.moon-week__emoji { font-size: 1.2rem; line-height: 1; filter: grayscale(0.3); }
+.moon-week__num { font-size: 0.62rem; color: var(--text-dim); letter-spacing: 0.02em; }
+.moon-week__day.is-today .moon-week__num { color: var(--gold-soft); }
+
+/* ===== Лунный календарь ===== */
+.moon-hero { text-align: center; padding: 26px 18px 22px; }
+.moon-hero__disc {
+  font-size: 4.2rem;
+  line-height: 1;
+  display: block;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 0 18px rgba(243, 237, 220, 0.35));
+}
+.moon-hero__name {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  color: var(--gold-soft);
+  margin: 0 0 6px;
+}
+.moon-hero__meta {
+  font-size: 0.86rem;
+  color: var(--text-dim);
+  letter-spacing: 0.03em;
+  margin: 0 0 14px;
+}
+.moon-hero__mood {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--text);
+  margin: 0 0 10px;
+}
+.moon-hero__invite {
+  font-family: var(--font-script);
+  font-size: 1.25rem;
+  line-height: 1.4;
+  color: var(--gold-soft);
+  margin: 0;
+}
+
+.moon-nodes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+.moon-node { text-align: center; padding: 16px 10px; }
+.moon-node__emoji { font-size: 1.7rem; display: block; margin-bottom: 6px; }
+.moon-node__when {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: var(--gold-soft);
+  margin: 4px 0 2px;
+}
+
+/* Сетка фаз на месяц вперёд */
+.moon-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.moon-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 2px;
+  border-radius: 12px;
+  background: rgba(28, 46, 34, 0.5);
+  border: 1px solid transparent;
+}
+.moon-cell--milestone { border-color: var(--border-strong); background: rgba(201, 164, 92, 0.08); }
+.moon-cell--today { box-shadow: inset 0 0 0 1.5px var(--gold); }
+.moon-cell__dow { font-size: 0.6rem; color: var(--text-faint); letter-spacing: 0.02em; }
+.moon-cell__emoji { font-size: 1.3rem; line-height: 1.1; }
+.moon-cell__day { font-size: 0.72rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
 /* Карточка ближайшего праздника */
 .sabbat-banner { overflow: hidden; }
 .sabbat-banner .countdown {
@@ -654,6 +755,7 @@
   position: fixed; inset: 0;
   background-size: cover; background-position: center;
   display: flex; align-items: center; justify-content: center;
+  overflow-y: auto; padding: 24px 0;
   z-index: 300;
 }
 .onboarding-veil {
@@ -663,6 +765,7 @@
 }
 .onboarding-card {
   position: relative; z-index: 1;
+  margin: auto;
   width: calc(100% - 36px); max-width: 440px;
   background: linear-gradient(160deg, rgba(20,34,25,0.97), rgba(11,20,15,0.99));
   border: 1px solid var(--border-strong);
@@ -723,3 +826,731 @@
 .profile-avatar-placeholder:hover { background: rgba(201,164,92,0.18); }
 .profile-name { font-size: 1.3rem; font-family: var(--font-display); color: var(--gold-soft); margin: 0 0 2px; }
 .profile-identity { font-size: 0.8rem; color: var(--text-faint); letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* ===== Путь (роль): акценты по выбранной роли ===== */
+/* --path-accent задаётся инлайном на .page; везде есть фолбэк на золото. */
+
+/* Кредо пути — рукописный эпиграф под приветствием */
+.path-credo {
+  font-family: var(--font-script);
+  font-size: 1.15rem;
+  line-height: 1.35;
+  color: var(--path-accent, var(--gold-soft));
+  opacity: 0.92;
+  margin: 2px 0 10px;
+  text-shadow: 0 0 14px color-mix(in srgb, var(--path-accent, var(--gold-soft)) 30%, transparent);
+}
+
+/* Шёпот пути — тихая подсказка дня */
+.path-whisper {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-top: 18px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--path-accent, var(--gold-soft)) 9%, rgba(28, 46, 34, 0.85)),
+    rgba(15, 26, 20, 0.92));
+  border: 1px solid color-mix(in srgb, var(--path-accent, var(--gold-soft)) 30%, transparent);
+  border-left: 3px solid var(--path-accent, var(--gold-soft));
+}
+.path-whisper__mark { font-size: 1.5rem; filter: grayscale(1); line-height: 1.2; }
+.path-whisper__text {
+  font-family: var(--font-body);
+  font-size: 0.98rem;
+  line-height: 1.5;
+  color: var(--text);
+  margin: 4px 0 0;
+}
+
+/* Маркер избранной пути тропинки */
+.quick--favored {
+  border-color: color-mix(in srgb, var(--path-accent, var(--gold-soft)) 45%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--path-accent, var(--gold-soft)) 18%, transparent);
+}
+.quick--favored .ico { filter: none; }
+.quick--favored::after {
+  content: '✦';
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 0.7rem;
+  color: var(--path-accent, var(--gold-soft));
+  opacity: 0.85;
+}
+.quick { position: relative; }
+
+/* Прочтение карты дня глазами пути */
+.card-lens {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px dashed color-mix(in srgb, var(--path-accent, var(--gold-soft)) 35%, transparent);
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.card-lens__mark { font-style: normal; filter: grayscale(1); }
+
+/* Тихий поиск / фильтры (дневник, травник) — почти незаметны, пока не нужны */
+.quiet-search__toggle {
+  filter: grayscale(1);
+  opacity: 0.7;
+  transition: opacity 0.2s, border-color 0.2s;
+}
+.quiet-search__toggle.is-on { opacity: 1; border-color: var(--border-strong); }
+
+.quiet-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -2px 0 12px;
+}
+.quiet-search__input {
+  flex: 1;
+  padding: 9px 14px;
+  font-size: 0.9rem;
+  background: rgba(15, 26, 20, 0.55);
+}
+.quiet-search__clear {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  background: rgba(15, 26, 20, 0.55);
+}
+.quiet-search__clear:active { transform: scale(0.94); }
+
+.quiet-filters {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin: -4px 0 14px;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.quiet-filters::-webkit-scrollbar { display: none; }
+.quiet-filters .chip { white-space: nowrap; flex-shrink: 0; }
+
+/* Рубашка карты/руны на главной — пока не открыты сегодня */
+.daycard-cover {
+  width: 70px;
+  height: 92px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(201, 164, 92, 0.12), transparent 60%),
+    linear-gradient(160deg, var(--forest-moss), var(--forest-night));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.7rem;
+  color: var(--gold-soft);
+}
+
+/* Руна дня — показываем картинку целиком (иной формат, чем у карт) */
+.rune-img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 72vh;
+  margin: 0 auto;
+  border-radius: var(--radius-lg, 22px);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-deep), var(--glow-gold);
+}
+
+/* Описание выбранного типажа ведьмы (настройки + онбординг) */
+.identity-desc {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: rgba(28, 46, 34, 0.45);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--path-accent, var(--gold-soft));
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.identity-desc--onboarding {
+  margin-top: 18px;
+  text-align: left;
+  background: rgba(11, 20, 15, 0.5);
+}
+
+/* ===== Моя тропинка ===== */
+.path-scene-art {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background-size: cover;
+  background-position: center;
+  box-shadow: var(--shadow-deep);
+  margin-bottom: 14px;
+}
+.path-scene-wrap { position: relative; }
+.path-share-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: rgba(5, 10, 7, 0.55);
+  backdrop-filter: blur(4px);
+  color: var(--paper, #e8e2d4);
+  font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.path-share-btn:active { opacity: 0.7; }
+.path-share-btn:disabled { opacity: 0.5; }
+.path-card {
+  padding: 18px;
+  border-radius: var(--radius);
+  background: linear-gradient(160deg, rgba(28, 46, 34, 0.7), rgba(15, 26, 20, 0.85));
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--path-accent, var(--gold-soft));
+}
+.path-card.center { text-align: center; }
+.path-scene-text {
+  font-family: var(--font-body);
+  font-size: 1.02rem;
+  line-height: 1.6;
+  color: var(--text);
+  margin: 0 0 16px;
+}
+.path-choice {
+  width: 100%;
+  text-align: left;
+  padding: 13px 15px;
+  border-radius: var(--radius-sm, 12px);
+  background: rgba(15, 26, 20, 0.55);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  transition: border-color 0.2s, background 0.2s;
+}
+.path-choice:active { transform: scale(0.99); }
+.path-choice:hover { border-color: color-mix(in srgb, var(--path-accent, var(--gold-soft)) 45%, transparent); }
+.path-outcome {
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--text);
+  margin: 0 0 10px;
+}
+.path-found, .path-learned {
+  display: inline-block;
+  margin: 6px 6px 0 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  background: color-mix(in srgb, var(--path-accent, var(--gold-soft)) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--path-accent, var(--gold-soft)) 40%, transparent);
+  color: var(--gold-soft);
+}
+.path-rest-glyph { font-size: 2.6rem; }
+.path-familiar { display: flex; gap: 14px; align-items: center; margin-bottom: 12px; }
+.path-familiar__glyph { font-size: 2.4rem; flex-shrink: 0; }
+.path-familiar__icon {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+}
+
+/* Нудж на главной */
+.path-nudge {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--path-accent, var(--gold-soft)) 12%, rgba(28, 46, 34, 0.7)),
+    rgba(15, 26, 20, 0.85));
+  border: 1px solid color-mix(in srgb, var(--path-accent, var(--gold-soft)) 35%, transparent);
+}
+.path-nudge:active { transform: scale(0.99); }
+.path-nudge__glyph { font-size: 1.6rem; filter: grayscale(0.2); }
+.path-nudge__text { font-family: var(--font-body); color: var(--text); }
+
+/* Котомка / дневник пути в профиле */
+.trinket-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+}
+.trinket {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border-radius: 12px;
+  background: rgba(28, 46, 34, 0.5);
+  border: 1px solid var(--border);
+  text-align: center;
+}
+.trinket--amulet { border-color: var(--border-strong); background: rgba(201, 164, 92, 0.08); }
+.trinket__glyph { font-size: 1.5rem; }
+.trinket__name { font-size: 0.66rem; color: var(--text-dim); line-height: 1.2; }
+.path-log-row {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: rgba(28, 46, 34, 0.4);
+  border: 1px solid var(--border);
+}
+.path-log-outcome { font-size: 0.9rem; color: var(--text); margin-top: 2px; }
+
+/* Карточка перенятого ремесла в профиле */
+.skill-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: rgba(28, 46, 34, 0.4);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--path-accent, var(--border));
+}
+.skill-card__glyph { font-size: 1.7rem; line-height: 1; }
+.skill-card__title { margin: 0; font-size: 1rem; }
+.skill-card__gift { margin: 3px 0 6px; font-size: 0.86rem; color: var(--muted); line-height: 1.4; }
+.skill-card__link {
+  display: inline-block;
+  font-size: 0.8rem;
+  color: var(--path-accent, var(--accent));
+  font-weight: 600;
+}
+.skill-card__link:active { opacity: 0.7; }
+
+/* Иконка фамильяра рядом с именем в шапке профиля */
+.profile-fam {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+.profile-fam img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+}
+.profile-fam__glyph { font-size: 1.25rem; line-height: 1; }
+
+/* Карточка фамильяра с портретом */
+.familiar-card {
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: rgba(28, 46, 34, 0.4);
+  border: 1px solid var(--border);
+}
+.familiar-card__portrait {
+  width: 84px;
+  min-width: 84px;
+  height: 112px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+.familiar-card__glyph {
+  width: 84px;
+  min-width: 84px;
+  height: 112px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.6rem;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+}
+.familiar-card__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.familiar-card__namerow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.familiar-card__namerow h3 { margin: 0; }
+.familiar-card__blurb { margin: 8px 0 0; font-size: 0.86rem; color: var(--muted); line-height: 1.45; }
+
+/* Кнопка-переход в профиль под тропинками */
+.profile-link {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: linear-gradient(160deg, rgba(28, 46, 34, 0.7), rgba(15, 26, 20, 0.85));
+  border: 1px solid var(--border);
+}
+.profile-link:active { transform: scale(0.99); }
+.profile-link__avatar {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  background: rgba(201, 164, 92, 0.1);
+  border: 1px solid var(--border-strong);
+  overflow: hidden;
+}
+.profile-link__avatar img { width: 100%; height: 100%; object-fit: cover; }
+.profile-link__name {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--gold-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.profile-link__hint { font-size: 0.78rem; color: var(--text-faint); }
+
+/* Кнопка настройки тропинок (в заголовке секции, после линии) */
+.tropinki-edit {
+  order: 3;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-size: 0.9rem;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  background: rgba(15, 26, 20, 0.55);
+}
+.tropinki-edit:active { transform: scale(0.94); }
+
+/* Строки редактора тропинок */
+.link-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: rgba(28, 46, 34, 0.5);
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.link-row__ico { font-size: 1.2rem; flex-shrink: 0; filter: grayscale(1); }
+.link-row__label { flex: 1; color: var(--text); font-size: 0.92rem; min-width: 0; }
+.link-row__btn {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--gold-soft);
+  border: 1px solid var(--border);
+  background: rgba(15, 26, 20, 0.6);
+  font-size: 0.95rem;
+}
+.link-row__btn:disabled { opacity: 0.3; }
+.link-row__btn--del { color: var(--ember); }
+.link-row__btn--plus { color: var(--gold-soft); display: flex; align-items: center; justify-content: center; }
+.link-row--add { cursor: pointer; }
+.link-row--add:active { transform: scale(0.99); }
+
+/* ===== Праздничный модал (день колеса года) ===== */
+.sabbat-greet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(120% 120% at 50% 40%, rgba(11, 20, 15, 0.78), rgba(5, 8, 6, 0.92));
+  backdrop-filter: blur(2px);
+}
+.sabbat-greet {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+  padding: 30px 24px 24px;
+  border-radius: var(--radius-lg, 22px);
+  background: linear-gradient(170deg, var(--forest-moss), var(--forest-night));
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.sabbat-greet__halo {
+  position: absolute;
+  top: -40%;
+  left: 50%;
+  width: 320px;
+  height: 320px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(201, 164, 92, 0.22), transparent 62%);
+}
+.sabbat-greet__logo {
+  position: relative;
+  width: 130px;
+  height: 130px;
+  object-fit: contain;
+  margin: 0 auto 14px;
+  filter: drop-shadow(0 4px 18px rgba(201, 164, 92, 0.35));
+}
+.sabbat-greet__blessing {
+  font-family: var(--font-script);
+  font-size: 1.5rem;
+  line-height: 1.3;
+  color: var(--gold-soft);
+  margin: 0 0 4px;
+}
+.sabbat-greet__name {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  margin: 0;
+}
+.sabbat-greet__tagline {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  margin: 8px 0 0;
+}
+
+/* ===== Таро ===== */
+/* Сегментный переключатель вкладок */
+.seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 16px;
+  border-radius: 999px;
+  background: rgba(15, 26, 20, 0.6);
+  border: 1px solid var(--border);
+}
+.seg__btn {
+  flex: 1;
+  padding: 9px 10px;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  color: var(--text-dim);
+  transition: background 0.2s, color 0.2s;
+}
+.seg__btn.is-active {
+  background: linear-gradient(180deg, var(--gold-soft), var(--gold-dim));
+  color: #20180a;
+}
+
+/* Полотно расклада */
+.tarot-canvas {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(201, 164, 92, 0.06), transparent 55%),
+    linear-gradient(160deg, rgba(28, 46, 34, 0.7), rgba(11, 20, 15, 0.85));
+  overflow: hidden;
+}
+.tarot-canvas--edit { touch-action: none; }
+.tarot-canvas__hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 24px;
+  color: var(--text-faint);
+  font-size: 0.85rem;
+}
+
+/* Карта на полотне */
+.tcard {
+  position: absolute;
+  width: 17%;
+  aspect-ratio: 2 / 3;
+  transform: translate(-50%, -50%);
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(160deg, var(--forest-moss), var(--forest-night));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.tcard img { width: 100%; height: 100%; object-fit: cover; }
+.tcard__num {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  color: var(--gold-soft);
+}
+.tcard__badge {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-size: 0.66rem;
+  color: var(--moon);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+.tcard--live { cursor: grab; }
+.tcard--live:active { cursor: grabbing; }
+
+/* Одна карта в раскладе — показываем крупно */
+.tcard--solo {
+  width: 58%;
+  border-radius: 14px;
+}
+.tcard--solo .tcard__num { font-size: 3rem; }
+.tcard--solo .tcard__badge { font-size: 0.95rem; top: 6px; left: 9px; }
+
+/* Сохранённый итог расклада — показываем как текст */
+.tarot-summary-text {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: rgba(28, 46, 34, 0.45);
+  border: 1px solid var(--border);
+  font-family: var(--font-body);
+  font-size: 0.98rem;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+/* Просмотр позиции (только чтение) + иконка редактирования */
+.tarot-view-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.tarot-view-edit {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-size: 1rem;
+  color: var(--gold-soft);
+  border: 1px solid var(--border-strong);
+  background: rgba(15, 26, 20, 0.55);
+}
+.tarot-view-edit:active { transform: scale(0.94); }
+.tarot-view-photo {
+  width: 100%;
+  max-height: 56vh;
+  object-fit: contain;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+.tarot-view-label {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  line-height: 1.35;
+  color: var(--gold-soft);
+  margin: 0 0 12px;
+}
+.tarot-view-text {
+  font-family: var(--font-body);
+  line-height: 1.6;
+  color: var(--text);
+  margin: 2px 0 14px;
+  white-space: pre-wrap;
+}
+
+/* Мини-превью в каталоге и списках */
+.tarot-canvas--mini { aspect-ratio: 3 / 4; border-color: var(--border); background: rgba(11, 20, 15, 0.6); }
+.tarot-canvas--mini .tcard {
+  width: 16%;
+  border-radius: 4px;
+  box-shadow: none;
+}
+.tarot-canvas--mini .tcard__num { font-size: 0.62rem; }
+.tarot-thumb {
+  width: 60px;
+  flex-shrink: 0;
+  align-self: stretch;
+  display: flex;
+}
+.tarot-thumb .tarot-canvas { aspect-ratio: 3 / 4; }
+
+/* Баннер запроса разрешения на уведомления */
+.perm-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  border-color: var(--border-strong);
+}
+.perm-banner:active { transform: scale(0.99); }
+.perm-banner__bell { font-size: 1.6rem; flex-shrink: 0; }
+
+/* Переключатель «влияние пути на оформление» */
+.path-toggle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  border-radius: var(--radius);
+  background: rgba(28, 46, 34, 0.5);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+}
+.path-toggle__track {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(15, 26, 20, 0.9);
+  border: 1px solid var(--border-strong);
+  transition: background 0.2s, border-color 0.2s;
+}
+.path-toggle__track.is-on {
+  background: linear-gradient(180deg, var(--gold-soft), var(--gold-dim));
+  border-color: var(--gold);
+}
+.path-toggle__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--moon);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s;
+}
+.path-toggle__track.is-on .path-toggle__knob { transform: translateX(18px); }
+.path-toggle__text { display: flex; flex-direction: column; gap: 2px; }
+.path-toggle__label { font-size: 0.92rem; color: var(--text); }
+.path-toggle__hint { font-size: 0.76rem; color: var(--text-faint); line-height: 1.35; }

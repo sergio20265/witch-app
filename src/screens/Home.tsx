@@ -1,47 +1,122 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageBackground } from '../components/PageBackground';
-import { greeting, formatLongDate, currentSeason, moonPhase } from '../lib/date';
+import { Sheet } from '../components/Sheet';
+import { greeting, formatLongDate, currentSeason, todayISO } from '../lib/date';
+import { moonInfo, upcomingMoon } from '../lib/moon';
 import { seasonNames, nextSabbat, formatSabbatDate } from '../data/wheelOfYear';
 import { cardForDate } from '../data/cards';
-import { cardArtById } from '../assets';
-import { readStore } from '../storage/useLocalStorage';
+import { runeForDate } from '../data/runes';
+import { cardArtById, runeArtById } from '../assets';
+import { readStore, useLocalStorage } from '../storage/useLocalStorage';
+import { identityFor, blendedPathWhisper } from '../data/identities';
+import { defaultPathState, stepsLeftToday } from '../lib/path';
+import type { PathState } from '../storage/types';
+import { PATH_ENABLED } from '../config';
 
 const seasonGlyph = { winter: '❄️', spring: '🌱', summer: '☀️', autumn: '🍂' } as const;
 
-const quickLinks = [
+// Все страницы, которые можно вынести в «Тропинки» на главной.
+interface LinkDef { to: string; ico: string; label: string }
+const LINK_CATALOG: LinkDef[] = [
   { to: '/journal', ico: '📖', label: 'Дневник' },
   { to: '/wheel', ico: '☸️', label: 'Колесо года' },
   { to: '/card', ico: '🍃', label: 'Карта дня' },
+  { to: '/rune', ico: 'ᚱ', label: 'Руна дня' },
+  { to: '/moon', ico: '🌙', label: 'Лунный календарь' },
+  { to: '/tarot', ico: '📜', label: 'Таро' },
+  ...(PATH_ENABLED ? [{ to: '/path', ico: '🌿', label: 'Моя тропинка' }] : []),
   { to: '/wishes', ico: '🌱', label: 'Желания' },
   { to: '/recipes', ico: '🫖', label: 'Травник' },
   { to: '/treasures', ico: '🍄', label: 'Сокровища' },
+  { to: '/memories', ico: '🍂', label: 'Воспоминания' },
+  { to: '/bookshelf', ico: '📚', label: 'Полочка' },
+  { to: '/aesthetic', ico: '🌸', label: 'Эстетика' },
+  { to: '/ingredients', ico: '🕯️', label: 'Ингредиенты' },
+  { to: '/my-calendar', ico: '🗓', label: 'Мой календарь' },
+  { to: '/reminders', ico: '🔔', label: 'Напоминания' },
+  { to: '/archive', ico: '🗂', label: 'Архив карт' },
 ];
+const CATALOG_MAP: Record<string, LinkDef> = Object.fromEntries(LINK_CATALOG.map((l) => [l.to, l]));
+const DEFAULT_HOME_LINKS = ['/journal', '/wheel', '/card', '/wishes', '/recipes', '/treasures'];
 
 export function Home() {
   const season = currentSeason();
   const { sabbat, daysUntil } = nextSabbat();
   const card = cardForDate();
-  const moon = moonPhase();
+  const moon = moonInfo();
+  const moonWeek = upcomingMoon(7);
   const userName = readStore<string>('userName', '');
+  const userAvatar = readStore<string>('userAvatar', '');
+  const pathFlavor = readStore<boolean>('pathFlavor', true);
+  const identity = identityFor(readStore<string>('userIdentity', ''));
+  const path = readStore<PathState>('pathState', defaultPathState());
+  const whisper = pathFlavor ? blendedPathWhisper([identity.id, ...path.skills]) : '';
+  const pathCalls = stepsLeftToday(path, todayISO()) > 0;
+  // Разделы, что путь поднимает: любимые текущего типажа + перенятых ремёсел.
+  const favoredRoutes = new Set<string>(
+    pathFlavor ? [...identity.favored, ...path.skills.flatMap((id) => identityFor(id).favored)] : [],
+  );
+
+  // Руна дня: у Рунной ведьмы заменяет карту, остальным включается в настройках.
+  const runeReplaces = identity.id === 'rune-witch';
+  const showRune = runeReplaces || readStore<boolean>('runeOfDay', false);
+  const rune = showRune ? runeForDate() : null;
+
+  // Карта/руна скрыты, пока не открыты сегодня (раскрытие фиксируется в истории).
+  const today = todayISO();
+  const cardRevealed = readStore<{ date: string }[]>('cardHistory', []).some((h) => h.date === today);
+  const runeRevealed = readStore<{ date: string }[]>('runeHistory', []).some((h) => h.date === today);
+
+  // Настраиваемые тропинки: пользователь выбирает страницы и их порядок.
+  const [homeLinks, setHomeLinks] = useLocalStorage<string[]>('homeLinks', DEFAULT_HOME_LINKS);
+  const [editingLinks, setEditingLinks] = useState(false);
+
+  const seen = new Set<string>();
+  const links = homeLinks
+    .map((to) => (runeReplaces && to === '/card' ? '/rune' : to))
+    .map((to) => CATALOG_MAP[to])
+    .filter((l): l is LinkDef => !!l && !seen.has(l.to) && (seen.add(l.to), true));
+  const available = LINK_CATALOG.filter((l) => !homeLinks.includes(l.to));
+
+  function moveLink(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= homeLinks.length) return;
+    const next = [...homeLinks];
+    [next[i], next[j]] = [next[j], next[i]];
+    setHomeLinks(next);
+  }
+  const removeLink = (to: string) => setHomeLinks(homeLinks.filter((t) => t !== to));
+  const addLink = (to: string) => { if (!homeLinks.includes(to)) setHomeLinks([...homeLinks, to]); };
 
   return (
     <>
       <PageBackground k="home" />
-      <div className="page">
+      <div className="page" style={pathFlavor ? { ['--path-accent' as any]: identity.accent } : undefined}>
         <section className="home-hero rise">
-          <span className="moon-mark flicker">🌙</span>
+          <span className="moon-mark flicker">{pathFlavor ? identity.glyph : '🌙'}</span>
           <p className="greeting">
             {greeting()}{userName ? `, ${userName}` : ''}
           </p>
+          {pathFlavor && <p className="path-credo">«{identity.credo}»</p>}
           <p className="date">{formatLongDate()}</p>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
             <div className="season-pill">
               <span>{seasonGlyph[season]}</span> Сейчас {seasonNames[season].toLowerCase()}
             </div>
-            <div className="season-pill">
-              <span>{moon.emoji}</span> {moon.name}
-            </div>
+            <Link to="/moon" className="season-pill season-pill--link">
+              <span>{moon.emoji}</span> {moon.name} · {moon.illumination}%
+            </Link>
           </div>
+
+          <Link to="/moon" className="moon-week" aria-label="Лунный календарь">
+            {moonWeek.map(({ date, info }, i) => (
+              <span key={i} className={'moon-week__day' + (i === 0 ? ' is-today' : '')}>
+                <span className="moon-week__emoji">{info.emoji}</span>
+                <span className="moon-week__num">{i === 0 ? 'сегодня' : date.getDate()}</span>
+              </span>
+            ))}
+          </Link>
         </section>
 
         <Link to="/wheel" className="card card--framed sabbat-banner rise" style={{ display: 'block', marginTop: 18 }}>
@@ -60,30 +135,145 @@ export function Home() {
           </div>
         </Link>
 
-        <Link to="/card" className="card rise" style={{ display: 'flex', gap: 14, alignItems: 'center', marginTop: 14 }}>
-          <img
-            src={cardArtById[card.card_id] ?? ''}
-            alt=""
-            style={{ width: 70, height: 92, objectFit: 'cover', borderRadius: 12, border: '1px solid var(--border)' }}
-          />
-          <div>
-            <div className="eyebrow">Карта дня</div>
-            <h3 style={{ margin: '4px 0' }}>{card.name}</h3>
-            <p className="muted" style={{ fontSize: '0.85rem', margin: 0 }}>Открыть послание дня →</p>
-          </div>
-        </Link>
+        {!runeReplaces && (
+          <Link to="/card" className="card rise" style={{ display: 'flex', gap: 14, alignItems: 'center', marginTop: 14 }}>
+            {cardRevealed ? (
+              <img
+                src={cardArtById[card.card_id] ?? ''}
+                alt=""
+                style={{ width: 70, height: 92, objectFit: 'cover', borderRadius: 12, border: '1px solid var(--border)' }}
+              />
+            ) : (
+              <div className="daycard-cover">🌑</div>
+            )}
+            <div>
+              <div className="eyebrow">Карта дня</div>
+              <h3 style={{ margin: '4px 0' }}>{cardRevealed ? card.name : 'Карта ждёт'}</h3>
+              <p className="muted" style={{ fontSize: '0.85rem', margin: 0 }}>
+                {cardRevealed ? 'Открыть послание дня →' : 'Коснись, чтобы открыть →'}
+              </p>
+            </div>
+          </Link>
+        )}
 
-        <h2 className="section-title">Тропинки</h2>
-        <div className="quick-grid rise">
-          {quickLinks.map((q) => (
-            <Link key={q.to} to={q.to} className="quick">
-              <span className="ico">{q.ico}</span>
-              {q.label}
-            </Link>
-          ))}
-        </div>
+        {rune && (
+          <Link to="/rune" className="card rise" style={{ display: 'flex', gap: 14, alignItems: 'center', marginTop: 14 }}>
+            {runeRevealed ? (
+              <img
+                src={runeArtById[rune.rune_id] ?? ''}
+                alt=""
+                style={{ width: 70, height: 92, objectFit: 'cover', borderRadius: 12, border: '1px solid var(--border)' }}
+              />
+            ) : (
+              <div className="daycard-cover">ᚱ</div>
+            )}
+            <div>
+              <div className="eyebrow">Руна дня</div>
+              <h3 style={{ margin: '4px 0' }}>{runeRevealed ? rune.name : 'Руна ждёт'}</h3>
+              <p className="muted" style={{ fontSize: '0.85rem', margin: 0 }}>
+                {runeRevealed ? 'Открыть знак дня →' : 'Коснись, чтобы открыть →'}
+              </p>
+            </div>
+          </Link>
+        )}
+
+        {whisper && (
+          <div className="path-whisper rise">
+            <span className="path-whisper__mark">{identity.glyph}</span>
+            <div>
+              <div className="eyebrow">Шёпот пути · {identity.element.toLowerCase()}</div>
+              <p className="path-whisper__text">{whisper}</p>
+            </div>
+          </div>
+        )}
+
+        <h2 className="section-title">
+          Тропинки
+          <button className="tropinki-edit" onClick={() => setEditingLinks(true)} aria-label="Настроить тропинки">✎</button>
+        </h2>
+        {links.length === 0 ? (
+          <button className="btn btn--ghost btn--block" onClick={() => setEditingLinks(true)}>Выбрать тропинки</button>
+        ) : (
+          <div className="quick-grid rise">
+            {links.map((q) => (
+              <Link key={q.to} to={q.to} className={'quick' + (favoredRoutes.has(q.to) ? ' quick--favored' : '')}>
+                <span className="ico">{q.ico}</span>
+                {q.label}
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {PATH_ENABLED && pathCalls && (
+          <Link to="/path" className="path-nudge rise">
+            <span className="path-nudge__glyph">🌿</span>
+            <div style={{ flex: 1 }}>
+              <div className="eyebrow">Странствие</div>
+              <div className="path-nudge__text">Тропинка зовёт — сделай шаг</div>
+            </div>
+            <span className="faint" style={{ fontSize: '1.2rem' }}>→</span>
+          </Link>
+        )}
+
+        {PATH_ENABLED && (
+          <Link to="/profile" className="profile-link rise">
+            <span className="profile-link__avatar">
+              {userAvatar ? <img src={userAvatar} alt="" /> : (pathFlavor ? identity.glyph : '🌙')}
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="profile-link__name">{userName || 'Профиль'}</div>
+              <div className="profile-link__hint">Фамильяр · навыки · котомка</div>
+            </div>
+            <span className="faint" style={{ fontSize: '1.2rem' }}>→</span>
+          </Link>
+        )}
+
         <div className="spacer" />
       </div>
+
+      {editingLinks && (
+        <Sheet title="Настроить тропинки" onClose={() => setEditingLinks(false)}>
+          <p className="muted" style={{ fontSize: '0.84rem', marginTop: -4, marginBottom: 12 }}>
+            Выбери, какие страницы показывать на главной, и расставь их по порядку.
+          </p>
+
+          <label className="label">Показаны</label>
+          <div className="stack stack--tight" style={{ marginBottom: 16 }}>
+            {homeLinks.map((to, i) => {
+              const l = CATALOG_MAP[to];
+              if (!l) return null;
+              return (
+                <div key={to} className="link-row">
+                  <span className="link-row__ico">{l.ico}</span>
+                  <span className="link-row__label">{l.label}</span>
+                  <button className="link-row__btn" onClick={() => moveLink(i, -1)} disabled={i === 0} aria-label="Выше">↑</button>
+                  <button className="link-row__btn" onClick={() => moveLink(i, 1)} disabled={i === homeLinks.length - 1} aria-label="Ниже">↓</button>
+                  <button className="link-row__btn link-row__btn--del" onClick={() => removeLink(to)} aria-label="Убрать">−</button>
+                </div>
+              );
+            })}
+            {homeLinks.length === 0 && <p className="faint" style={{ fontSize: '0.8rem' }}>Пока ничего не выбрано.</p>}
+          </div>
+
+          {available.length > 0 && (
+            <>
+              <label className="label">Ещё доступны</label>
+              <div className="stack stack--tight">
+                {available.map((l) => (
+                  <button key={l.to} className="link-row link-row--add" onClick={() => addLink(l.to)}>
+                    <span className="link-row__ico">{l.ico}</span>
+                    <span className="link-row__label">{l.label}</span>
+                    <span className="link-row__btn link-row__btn--plus">＋</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          <div className="spacer" />
+          <button className="btn btn--primary btn--block" onClick={() => setEditingLinks(false)}>Готово</button>
+        </Sheet>
+      )}
     </>
   );
 }

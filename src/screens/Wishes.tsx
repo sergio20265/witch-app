@@ -3,6 +3,7 @@ import { PageBackground } from '../components/PageBackground';
 import { PageHeader } from '../components/PageHeader';
 import { Sheet } from '../components/Sheet';
 import { PhotoField } from '../components/PhotoField';
+import { Photo } from '../components/Photo';
 import { useLocalStorage, newId } from '../storage/useLocalStorage';
 import { type Wish, type WishStatus, wishStatusNames, wishStatusGlyph } from '../storage/types';
 import { formatShortDate } from '../lib/date';
@@ -70,7 +71,7 @@ export function Wishes() {
             {wishes.map((w) => (
               <button key={w.id} className="list-card" onClick={() => setDraft({ ...w })} style={{ textAlign: 'left' }}>
                 {w.photo ? (
-                  <img className="list-card__thumb" src={w.photo} alt="" />
+                  <Photo className="list-card__thumb" src={w.photo} />
                 ) : (
                   <span className="list-card__glyph">{wishStatusGlyph[w.status]}</span>
                 )}

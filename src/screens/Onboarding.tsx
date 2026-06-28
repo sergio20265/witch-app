@@ -1,17 +1,7 @@
 import { useState } from 'react';
 import { writeStore } from '../storage/useLocalStorage';
 import { bgFor } from '../assets';
-
-const IDENTITIES = [
-  { id: 'witch',        label: 'Ведьма',          glyph: '🌙' },
-  { id: 'forest-witch', label: 'Лесная ведьма',   glyph: '🌿' },
-  { id: 'herbalist',    label: 'Травница',         glyph: '🌾' },
-  { id: 'mystic',       label: 'Мистик',           glyph: '🔮' },
-  { id: 'guardian',     label: 'Хранительница',    glyph: '🕯️' },
-  { id: 'rune-witch',   label: 'Рунная ведьма',    glyph: '᚛' },
-  { id: 'hermit',       label: 'Отшельница',       glyph: '🍄' },
-  { id: 'naturalist',   label: 'Природница',       glyph: '🌲' },
-];
+import { IDENTITIES } from '../data/identities';
 
 interface Props {
   onDone: () => void;
@@ -75,9 +65,14 @@ export function Onboarding({ onDone }: Props) {
               </button>
             ))}
           </div>
+          {identity && (
+            <p className="identity-desc identity-desc--onboarding">
+              {IDENTITIES.find((i) => i.id === identity)?.description}
+            </p>
+          )}
           <button
             className="btn btn--primary btn--block"
-            style={{ marginTop: 24 }}
+            style={{ marginTop: 20 }}
             disabled={!identity}
             onClick={finish}
           >

@@ -25,4 +25,11 @@ export async function initNative() {
       }
     });
   } catch { /* ignore */ }
+
+  // Пересобираем расписание уведомлений при каждом запуске: так напоминания
+  // о следующем празднике и ближайших фазах луны всегда актуальны.
+  try {
+    const { rescheduleNotifications } = await import('./notifications');
+    await rescheduleNotifications();
+  } catch { /* ignore */ }
 }

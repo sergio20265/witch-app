@@ -219,3 +219,22 @@ const monthNames = [
 export function formatSabbatDate(s: Sabbat): string {
   return `${s.date.day} ${monthNames[s.date.month - 1]}`;
 }
+
+/** Тёплое поздравление с праздником (родительный падеж под каждое имя). */
+export const sabbatBlessing: Record<string, string> = {
+  samhain:    'Благословенного Самайна',
+  yule:       'Светлого Йоля',
+  imbolc:     'Счастливого Имболка',
+  ostara:     'Счастливой Остары',
+  beltane:    'Цветущего Белтейна',
+  litha:      'Счастливой Литы',
+  lughnasadh: 'Щедрого Лугнасада',
+  mabon:      'Благословенного Мабона',
+};
+
+/** Праздник колеса, если он выпадает на переданную дату, иначе null. */
+export function sabbatOnDate(from = new Date()): Sabbat | null {
+  const m = from.getMonth() + 1;
+  const d = from.getDate();
+  return wheelOfYear.find((s) => s.date.month === m && s.date.day === d) ?? null;
+}

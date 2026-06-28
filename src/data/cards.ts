@@ -1,5 +1,7 @@
 // Карты дня — мягкий совет / настроение / маленькое задание.
 // Это не гадание. card_id явно указывает, какое изображение использовать.
+import { userSeed } from '../lib/seed';
+import { readStore, writeStore } from '../storage/useLocalStorage';
 
 export type CardCategory =
   | 'plants'
@@ -19,6 +21,7 @@ export interface DayCard {
   text: string;
   type: CardType;
   category: CardCategory;
+  rare?: boolean;    // редкая карта — пониженный шанс выпадения
 }
 
 export const cardCategoryNames: Record<CardCategory, string> = {
@@ -89,6 +92,22 @@ export const dayCards: DayCard[] = [
     category: 'sabbats',
   },
   {
+    id: 'trust',
+    card_id: 'card-26',
+    name: 'Доверие',
+    text: 'Жизнь знает дорогу лучше, чем ты думаешь.',
+    type: 'совет',
+    category: 'animals',
+  },
+  {
+    id: 'rain-letting',
+    card_id: 'card-28',
+    name: 'Дождь',
+    text: 'Всё, что должно уйти, уходит с дождём.',
+    type: 'настроение',
+    category: 'weather',
+  },
+  {
     id: 'teacup',
     card_id: 'card-30',
     name: 'Чашка чая',
@@ -120,14 +139,196 @@ export const dayCards: DayCard[] = [
     type: 'настроение',
     category: 'animals',
   },
+
+  // Карты с собственными иллюстрациями (тексты — с самих карт).
+  {
+    id: 'fly-agaric',
+    card_id: 'card-34',
+    name: 'Мухомор',
+    text: 'Не всё то яд, что пугает. В каждой тени есть своя мудрость.',
+    type: 'настроение',
+    category: 'plants',
+  },
+  {
+    id: 'rowan',
+    card_id: 'card-35',
+    name: 'Рябина',
+    text: 'Защита, мудрость и связь с родом всегда с тобой.',
+    type: 'настроение',
+    category: 'plants',
+  },
+  {
+    id: 'forest-lake',
+    card_id: 'card-36',
+    name: 'Лесное озеро',
+    text: 'Здесь можно увидеть своё настоящее отражение.',
+    type: 'настроение',
+    category: 'sky',
+  },
+  {
+    id: 'secret-door',
+    card_id: 'card-37',
+    name: 'Тайная дверь',
+    text: 'Иногда ответы ближе, чем ты думаешь.',
+    type: 'совет',
+    category: 'objects',
+  },
+  {
+    id: 'hope',
+    card_id: 'card-38',
+    name: 'Надежда',
+    text: 'Даже самый маленький свет способен разогнать самую тёмную ночь.',
+    type: 'настроение',
+    category: 'objects',
+  },
+  {
+    id: 'star-gatherer',
+    card_id: 'card-39',
+    name: 'Собирательница звёзд',
+    text: 'Ты замечаешь то, что другие не видят. Продолжай.',
+    type: 'настроение',
+    category: 'sky',
+  },
+  {
+    id: 'trust-wolf',
+    card_id: 'card-40',
+    name: 'Доверие',
+    text: 'Иногда самое сильное, что ты можешь сделать — это просто довериться.',
+    type: 'совет',
+    category: 'animals',
+  },
+  {
+    id: 'wanderer',
+    card_id: 'card-41',
+    name: 'Странник',
+    text: 'Иногда путь важнее цели. Доверься дороге.',
+    type: 'настроение',
+    category: 'sky',
+  },
+  {
+    id: 'moon-river',
+    card_id: 'card-42',
+    name: 'Луна',
+    text: 'Доверься течению. Ты не одна в этом пути.',
+    type: 'настроение',
+    category: 'sky',
+  },
+  {
+    id: 'full-moon',
+    card_id: 'card-43',
+    name: 'Полнолуние',
+    text: 'Пора отпустить лишнее, чтобы освободить место новому.',
+    type: 'настроение',
+    category: 'sky',
+  },
+  {
+    id: 'raven',
+    card_id: 'card-44',
+    name: 'Ворон',
+    text: 'Послания приходят тогда, когда ты готова их услышать.',
+    type: 'настроение',
+    category: 'animals',
+  },
+  {
+    id: 'fern',
+    card_id: 'card-45',
+    name: 'Папоротник',
+    text: 'Даже в тени есть сила. Тихо расти. Всё придёт в своё время.',
+    type: 'настроение',
+    category: 'plants',
+  },
+
+  // Редкие карты — пониженный шанс выпадения.
+  {
+    id: 'forest-house',
+    card_id: 'card-50',
+    name: 'Домик в лесу',
+    text: 'Иногда лучший путь — вернуться к себе.',
+    type: 'настроение',
+    category: 'objects',
+    rare: true,
+  },
+  {
+    id: 'old-lighthouse',
+    card_id: 'card-51',
+    name: 'Старый маяк',
+    text: 'Даже в самой тёмной ночи есть свет, который ведёт домой.',
+    type: 'настроение',
+    category: 'objects',
+    rare: true,
+  },
+  {
+    id: 'white-wolf',
+    card_id: 'card-52',
+    name: 'Белый волк',
+    text: 'Доверяй своим инстинктам.',
+    type: 'совет',
+    category: 'animals',
+    rare: true,
+  },
+  {
+    id: 'forest-lady',
+    card_id: 'card-53',
+    name: 'Хозяйка леса',
+    text: 'Ты уже нашла гораздо больше, чем ищешь.',
+    type: 'настроение',
+    category: 'animals',
+    rare: true,
+  },
 ];
 
-/** Детерминированная «карта дня»: одна и та же дата → одна и та же карта. */
-export function cardForDate(date = new Date()): DayCard {
-  const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-  let h = 0;
+// Взвешенный пул: обычная карта встречается в RARE_WEIGHT раз чаще редкой.
+const RARE_WEIGHT = 10;
+const weightedCards: DayCard[] = dayCards.flatMap((c) =>
+  Array<DayCard>(c.rare ? 1 : RARE_WEIGHT).fill(c),
+);
+
+// Хеш с лавинообразным финализатором: соседние ключи (соседние дни) расходятся
+// далеко по колоде — иначе из-за блоков одинаковых карт в weightedCards одна и
+// та же карта выпадала по нескольку дней подряд.
+function hashKey(key: string): number {
+  let h = 2166136261 >>> 0;
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
-  return dayCards[h % dayCards.length];
+  h ^= h >>> 16; h = Math.imul(h, 2246822507) >>> 0;
+  h ^= h >>> 13; h = Math.imul(h, 3266489909) >>> 0;
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+function dayKey(date: Date): string {
+  return `${userSeed()}-${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+function isoDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+function pickCard(date: Date, salt: number): DayCard {
+  const h = hashKey(salt ? `${dayKey(date)}#${salt}` : dayKey(date));
+  return weightedCards[h % weightedCards.length];
+}
+
+/**
+ * «Карта дня»: своя у каждого пользователя (сид устройства). Без аргумента —
+ * сегодняшняя: фиксируется в хранилище (стабильна весь день и одинакова на всех
+ * экранах) и избегает вчерашней карты, чтобы не повторяться подряд. С явной датой
+ * — чистый детерминированный расчёт (для истории/архива).
+ */
+export function cardForDate(date?: Date): DayCard {
+  if (date) return pickCard(date, 0);
+
+  const now = new Date();
+  const today = isoDate(now);
+  const stored = readStore<{ date: string; id: string } | null>('dailyCard', null);
+  if (stored && stored.date === today) {
+    const fixed = cardById(stored.id);
+    if (fixed) return fixed;
+  }
+
+  const avoid = stored?.id ?? null; // карта вчерашнего (последнего) дня
+  let card = pickCard(now, 0);
+  for (let salt = 1; salt <= 16 && avoid && card.id === avoid; salt++) {
+    card = pickCard(now, salt);
+  }
+  writeStore('dailyCard', { date: today, id: card.id });
+  return card;
 }
 
 export function cardById(id: string): DayCard | undefined {

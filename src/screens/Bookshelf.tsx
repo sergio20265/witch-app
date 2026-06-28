@@ -3,6 +3,7 @@ import { PageBackground } from '../components/PageBackground';
 import { PageHeader } from '../components/PageHeader';
 import { Sheet } from '../components/Sheet';
 import { PhotoField } from '../components/PhotoField';
+import { Photo } from '../components/Photo';
 import { useLocalStorage, newId } from '../storage/useLocalStorage';
 import type { BookEntry, BookStatus } from '../storage/types';
 import { bookStatusNames } from '../storage/types';
@@ -89,7 +90,7 @@ export function Bookshelf() {
             {shown.map((b) => (
               <button key={b.id} className="book-card" onClick={() => setView(b)}>
                 {b.cover ? (
-                  <img className="book-card__cover" src={b.cover} alt={b.title} />
+                  <Photo className="book-card__cover" src={b.cover} alt={b.title} />
                 ) : (
                   <div className="book-card__cover book-card__cover--empty">📖</div>
                 )}
@@ -108,7 +109,7 @@ export function Bookshelf() {
       {/* Просмотр */}
       {view && (
         <Sheet title={view.title} onClose={() => setView(null)}>
-          {view.cover && <img src={view.cover} alt="" style={{ width: '100%', borderRadius: 'var(--radius)', marginBottom: 14 }} />}
+          {view.cover && <Photo src={view.cover} style={{ width: '100%', borderRadius: 'var(--radius)', marginBottom: 14 }} />}
           <div className="row row--wrap" style={{ marginBottom: 10 }}>
             <span className="chip">{bookStatusNames[view.status]}</span>
             {view.genre && <span className="chip">{view.genre}</span>}

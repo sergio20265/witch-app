@@ -3,6 +3,7 @@ import { PageBackground } from '../components/PageBackground';
 import { PageHeader } from '../components/PageHeader';
 import { Sheet } from '../components/Sheet';
 import { PhotoField } from '../components/PhotoField';
+import { Photo } from '../components/Photo';
 import { useLocalStorage, newId } from '../storage/useLocalStorage';
 import type { Treasure } from '../storage/types';
 import { formatShortDate } from '../lib/date';
@@ -55,7 +56,7 @@ export function Treasures() {
             {items.map((t) => (
               <button key={t.id} className="card" style={{ padding: 8, textAlign: 'left' }} onClick={() => { setDraft({ ...t }); setTagText(''); }}>
                 {t.photo ? (
-                  <img src={t.photo} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 10, display: 'block' }} />
+                  <Photo src={t.photo} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 10, display: 'block' }} />
                 ) : (
                   <div style={{ width: '100%', aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', background: 'rgba(201,164,92,0.06)', borderRadius: 10 }}>🍃</div>
                 )}

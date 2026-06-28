@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { readStore, writeStore } from '../storage/useLocalStorage';
+import { daytimeNow } from './daytime';
 
 export type CustomBgs = Record<string, string>; // route → base64 jpeg
 
@@ -10,6 +11,8 @@ interface ThemeCtx {
   setCustomBg: (route: string, data: string) => void;
   removeCustomBg: (route: string) => void;
   bgForRoute: (route: string) => string;
+  ambient: boolean;
+  setAmbient: (v: boolean) => void;
 }
 
 const Ctx = createContext<ThemeCtx>(null!);
@@ -17,6 +20,26 @@ const Ctx = createContext<ThemeCtx>(null!);
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [opacity, setOpacityState] = useState<number>(() => readStore('bgOpacity', 0.5));
   const [customBgs, setCustomBgsState] = useState<CustomBgs>(() => readStore('customBgs', {}));
+  const [ambient, setAmbientState] = useState<boolean>(() => readStore('ambient', true));
+
+  // Атмосфера по времени суток: ставим data-daytime на <html>, CSS делает остальное.
+  useEffect(() => {
+    writeStore('ambient', ambient);
+    const el = document.documentElement;
+    const apply = () => {
+      if (ambient) el.dataset.daytime = daytimeNow();
+      else delete el.dataset.daytime;
+    };
+    apply();
+    if (!ambient) return;
+    // Обновляем при возврате в приложение и раз в 10 минут — вечер плавно станет ночью.
+    const onVis = () => { if (!document.hidden) apply(); };
+    document.addEventListener('visibilitychange', onVis);
+    const id = window.setInterval(apply, 10 * 60 * 1000);
+    return () => { document.removeEventListener('visibilitychange', onVis); window.clearInterval(id); };
+  }, [ambient]);
+
+  function setAmbient(v: boolean) { setAmbientState(v); }
 
   // Применяем CSS-переменную при изменении
   useEffect(() => {
@@ -48,7 +71,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <Ctx.Provider value={{ opacity, setOpacity, customBgs, setCustomBg, removeCustomBg, bgForRoute }}>
+    <Ctx.Provider value={{ opacity, setOpacity, customBgs, setCustomBg, removeCustomBg, bgForRoute, ambient, setAmbient }}>
       {children}
     </Ctx.Provider>
   );

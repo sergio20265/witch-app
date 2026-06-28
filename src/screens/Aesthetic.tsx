@@ -3,6 +3,8 @@ import { PageBackground } from '../components/PageBackground';
 import { PageHeader } from '../components/PageHeader';
 import { Sheet } from '../components/Sheet';
 import { PhotoField } from '../components/PhotoField';
+import { Photo } from '../components/Photo';
+import { putImage } from '../lib/imageStore';
 import { useLocalStorage, newId } from '../storage/useLocalStorage';
 import type { AestheticPost } from '../storage/types';
 import { formatShortDate } from '../lib/date';
@@ -35,11 +37,16 @@ export function Aesthetic() {
     return () => window.removeEventListener('grimoire:share', onShare);
   }, []);
 
-  function save() {
+  async function save() {
     if (!draft) return;
     if (!draft.imageData) { setDraft(null); return; }
-    const exists = posts.some((p) => p.id === draft.id);
-    setPosts(exists ? posts.map((p) => (p.id === draft.id ? draft : p)) : [draft, ...posts]);
+    // Картинка из Android-шаринга приходит как inline dataURL — кладём её в IndexedDB,
+    // чтобы не раздувать localStorage (фото из PhotoField уже ссылки).
+    const post = draft.imageData.startsWith('data:')
+      ? { ...draft, imageData: await putImage(draft.imageData) }
+      : draft;
+    const exists = posts.some((p) => p.id === post.id);
+    setPosts(exists ? posts.map((p) => (p.id === post.id ? post : p)) : [post, ...posts]);
     setDraft(null);
     setTagText('');
   }
@@ -76,7 +83,7 @@ export function Aesthetic() {
           <div className="aesthetic-grid">
             {posts.map((p) => (
               <button key={p.id} className="aesthetic-item" onClick={() => setView(p)}>
-                <img src={p.imageData} alt={p.caption ?? ''} />
+                <Photo src={p.imageData} alt={p.caption ?? ''} />
                 {p.caption && <span className="aesthetic-item__caption">{p.caption}</span>}
               </button>
             ))}
@@ -88,7 +95,7 @@ export function Aesthetic() {
       {/* Просмотр */}
       {view && (
         <Sheet title={view.caption ?? formatShortDate(view.savedAt)} onClose={() => setView(null)}>
-          <img src={view.imageData} alt="" style={{ width: '100%', borderRadius: 'var(--radius)', marginBottom: 12 }} />
+          <Photo src={view.imageData} style={{ width: '100%', borderRadius: 'var(--radius)', marginBottom: 12 }} />
           {view.caption && <p style={{ margin: '0 0 8px', wordBreak: 'break-word' }}>{view.caption}</p>}
           {view.tags.length > 0 && (
             <div className="row row--wrap" style={{ marginBottom: 10 }}>

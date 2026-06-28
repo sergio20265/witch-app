@@ -33,6 +33,31 @@
     radial-gradient(120% 80% at 50% -10%, transparent 45%, rgba(5, 10, 7, 0.5) 100%);
 }
 
+/* Атмосфера по времени суток — мягкий тонирующий слой над фоном.
+   Активируется data-daytime на <html>; днём отсутствует (атрибут не выставлен). */
+.shell__ambient {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 1.2s ease, background 1.2s ease;
+}
+/* Вечер — тёплое свечение свечи снизу. */
+html[data-daytime='evening'] .shell__ambient {
+  opacity: 1;
+  background:
+    radial-gradient(140% 90% at 50% 118%, rgba(199, 116, 58, 0.18), transparent 58%),
+    linear-gradient(180deg, rgba(40, 22, 10, 0.06), transparent 40%);
+}
+/* Ночь — прохладная глубокая дымка, чуть приглушает. */
+html[data-daytime='night'] .shell__ambient {
+  opacity: 1;
+  background:
+    linear-gradient(180deg, rgba(10, 16, 32, 0.30), rgba(4, 7, 16, 0.44)),
+    radial-gradient(120% 80% at 50% -10%, rgba(60, 80, 130, 0.10), transparent 55%);
+}
+
 .shell__scroll {
   position: relative;
   z-index: 2;

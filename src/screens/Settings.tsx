@@ -6,17 +6,9 @@ import { useLocalStorage } from '../storage/useLocalStorage';
 import { useTheme } from '../lib/ThemeContext';
 import { bgFor } from '../assets';
 import { compressImage } from '../lib/compressImage';
-
-const IDENTITY_LABELS: Record<string, string> = {
-  'witch':        'Ведьма',
-  'forest-witch': 'Лесная ведьма',
-  'herbalist':    'Травница',
-  'mystic':       'Мистик',
-  'guardian':     'Хранительница',
-  'rune-witch':   'Рунная ведьма',
-  'hermit':       'Отшельница',
-  'naturalist':   'Природница',
-};
+import { Capacitor } from '@capacitor/core';
+import { IDENTITIES, identityFor } from '../data/identities';
+import { daytimeNow, daytimeMeta } from '../lib/daytime';
 
 const SECTIONS = [
   { route: '/',            label: 'Главная' },
@@ -38,16 +30,20 @@ const SECTIONS = [
 ];
 
 const KEYS = [
-  'journal', 'journalMoods', 'journalFeelings', 'wishes', 'treasures',
+  'journal', 'journalMoods', 'journalFeelings', 'journalTags', 'wishes', 'treasures',
   'recipes', 'recipeCategories', 'cardHistory', 'cardLikes', 'sabbatEntries',
-  'sabbatCustom', 'reminders', 'reminderAuto', 'memories', 'bookshelf',
+  'sabbatCustom', 'reminders', 'reminderAuto', 'reminderMoon', 'memories', 'bookshelf',
+  'runeHistory', 'runeLikes', 'runeOfDay', 'tarotSpreads', 'pathState',
+  'dailyCard', 'dailyRune',
   'bookGenres', 'aesthetic', 'ingredients', 'ingredientCategories',
   'personalEvents', 'personalEventCategories',
   'userName', 'userIdentity', 'userAvatar', 'onboarded', 'bgOpacity', 'customBgs',
+  'pathFlavor', 'ambient', 'homeLinks', 'randomSeed',
 ];
 
 export function Settings() {
-  const { opacity, setOpacity, customBgs, setCustomBg, removeCustomBg } = useTheme();
+  const { opacity, setOpacity, customBgs, setCustomBg, removeCustomBg, ambient, setAmbient } = useTheme();
+  const period = daytimeMeta[daytimeNow()];
   const [msg, setMsg] = useState('');
   const [showBgSheet, setShowBgSheet] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -55,6 +51,8 @@ export function Settings() {
   const [userName, setUserName] = useLocalStorage<string>('userName', '');
   const [userIdentity, setUserIdentity] = useLocalStorage<string>('userIdentity', '');
   const [userAvatar, setUserAvatar] = useLocalStorage<string>('userAvatar', '');
+  const [pathFlavor, setPathFlavor] = useLocalStorage<boolean>('pathFlavor', true);
+  const [runeOfDay, setRuneOfDay] = useLocalStorage<boolean>('runeOfDay', false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const avatarRef = useRef<HTMLInputElement>(null);
@@ -86,18 +84,44 @@ export function Settings() {
     e.target.value = '';
   }
 
-  function exportData() {
+  function buildDump(): string {
     const dump: Record<string, unknown> = {};
     for (const k of KEYS) {
       const raw = localStorage.getItem('grimoire:' + k);
       if (raw) dump[k] = JSON.parse(raw);
     }
-    const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
+    return JSON.stringify(dump, null, 2);
+  }
+
+  function exportData() {
+    const blob = new Blob([buildDump()], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = `лесной-гримуар-${new Date().toISOString().slice(0, 10)}.json`;
     a.click(); URL.revokeObjectURL(url);
     setMsg('Гримуар сохранён в файл 🌙');
+  }
+
+  // Лёгкий бэкап «на Google Диск»: пишем файл и открываем нативный «Поделиться»,
+  // где пользователь выбирает Диск (или любое место). Без OAuth и автосинхрона.
+  async function backupToDrive() {
+    if (!Capacitor.isNativePlatform()) { exportData(); return; }
+    const filename = `лесной-гримуар-${new Date().toISOString().slice(0, 10)}.json`;
+    try {
+      const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
+      await Filesystem.writeFile({ path: filename, data: buildDump(), directory: Directory.Cache, encoding: Encoding.UTF8 });
+      const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache });
+      const { Share } = await import('@capacitor/share');
+      await Share.share({
+        title: 'Резервная копия гримуара',
+        text: 'Сохрани этот файл в Google Диск, чтобы перенести гримуар на другое устройство.',
+        files: [uri],
+        dialogTitle: 'Сохранить копию на Google Диск',
+      });
+      setMsg('Выбери Google Диск в окне «Поделиться» ☁️');
+    } catch {
+      setMsg('Не удалось подготовить копию.');
+    }
   }
 
   function importData(e: React.ChangeEvent<HTMLInputElement>) {
@@ -152,14 +176,66 @@ export function Settings() {
                 {userName || '—'}
               </div>
             )}
-            <div className="profile-identity">{IDENTITY_LABELS[userIdentity] ?? userIdentity ?? '—'}</div>
+            <div className="profile-identity">
+              {userIdentity ? `${identityFor(userIdentity).label} · ${identityFor(userIdentity).element.toLowerCase()}` : '—'}
+            </div>
           </div>
         </div>
-        <div className="text-chips" style={{ marginBottom: 18 }}>
-          {Object.entries(IDENTITY_LABELS).map(([id, label]) => (
-            <button key={id} className={'chip' + (userIdentity === id ? ' chip--active' : '')} onClick={() => setUserIdentity(id)}>{label}</button>
+        <div className="text-chips" style={{ marginBottom: 14 }}>
+          {IDENTITIES.map((i) => (
+            <button key={i.id} className={'chip' + (userIdentity === i.id ? ' chip--active' : '')} onClick={() => setUserIdentity(i.id)}>{i.glyph} {i.label}</button>
           ))}
         </div>
+        {userIdentity && identityFor(userIdentity).description && (
+          <p className="identity-desc">{identityFor(userIdentity).description}</p>
+        )}
+        <button
+          className="path-toggle"
+          role="switch"
+          aria-checked={pathFlavor}
+          onClick={() => setPathFlavor(!pathFlavor)}
+        >
+          <span className={'path-toggle__track' + (pathFlavor ? ' is-on' : '')}>
+            <span className="path-toggle__knob" />
+          </span>
+          <span className="path-toggle__text">
+            <span className="path-toggle__label">Влияние пути на оформление</span>
+            <span className="path-toggle__hint">
+              {pathFlavor
+                ? 'Кредо, шёпот пути и оттенок роли видны в гримуаре'
+                : 'Обычный вид без подсказок и оттенков роли'}
+            </span>
+          </span>
+        </button>
+
+        {userIdentity === 'rune-witch' ? (
+          <div className="path-toggle" style={{ cursor: 'default' }}>
+            <span className="path-toggle__track is-on"><span className="path-toggle__knob" /></span>
+            <span className="path-toggle__text">
+              <span className="path-toggle__label">Руна дня</span>
+              <span className="path-toggle__hint">Ты на пути Рунной ведьмы — руна дня заменяет карту</span>
+            </span>
+          </div>
+        ) : (
+          <button
+            className="path-toggle"
+            role="switch"
+            aria-checked={runeOfDay}
+            onClick={() => setRuneOfDay(!runeOfDay)}
+          >
+            <span className={'path-toggle__track' + (runeOfDay ? ' is-on' : '')}>
+              <span className="path-toggle__knob" />
+            </span>
+            <span className="path-toggle__text">
+              <span className="path-toggle__label">Руна дня</span>
+              <span className="path-toggle__hint">
+                {runeOfDay
+                  ? 'Показывать руну дня на главной и в разделе «Ещё»'
+                  : 'Добавить руну дня рядом с картой дня'}
+              </span>
+            </span>
+          </button>
+        )}
 
         {/* Оформление */}
         <h2 className="section-title">Оформление</h2>
@@ -187,21 +263,45 @@ export function Settings() {
           <button className="btn btn--ghost btn--block" onClick={() => setShowBgSheet(true)}>
             🖼 Настроить фоны по разделам
           </button>
+
+          <button
+            className="path-toggle"
+            role="switch"
+            aria-checked={ambient}
+            onClick={() => setAmbient(!ambient)}
+            style={{ marginTop: 16, marginBottom: 0 }}
+          >
+            <span className={'path-toggle__track' + (ambient ? ' is-on' : '')}>
+              <span className="path-toggle__knob" />
+            </span>
+            <span className="path-toggle__text">
+              <span className="path-toggle__label">Вечерний и ночной режим</span>
+              <span className="path-toggle__hint">
+                {ambient
+                  ? `Гримуар мягко теплеет к вечеру и стихает к ночи · сейчас ${period.glyph} ${period.label}`
+                  : 'Оформление одинаково в любое время суток'}
+              </span>
+            </span>
+          </button>
         </div>
 
         {/* Данные */}
         <h2 className="section-title">Мои данные</h2>
         <p className="muted" style={{ fontSize: '0.88rem' }}>
-          Всё хранится только на этом устройстве. Сделай резервную копию, чтобы не потерять записи.
+          Всё хранится только на этом устройстве. Сделай резервную копию на Google Диск, чтобы не потерять записи и перенести их на другой телефон.
         </p>
         <div className="stack stack--tight">
-          <button className="btn btn--ghost btn--block" onClick={exportData}>⬇️ Сохранить копию гримуара</button>
+          <button className="btn btn--ghost btn--block" onClick={backupToDrive}>☁️ Сохранить копию на Google Диск</button>
+          <button className="btn btn--ghost btn--block" onClick={exportData}>⬇️ Сохранить копию в файл</button>
           <label className="btn btn--ghost btn--block" style={{ cursor: 'pointer' }}>
             ⬆️ Восстановить из копии
             <input type="file" accept="application/json" hidden onChange={importData} />
           </label>
           <button className="btn btn--ghost btn--block" onClick={wipe} style={{ color: 'var(--ember)' }}>🔥 Стереть всё</button>
         </div>
+        <p className="faint" style={{ fontSize: '0.74rem', marginTop: 8 }}>
+          Чтобы перенести гримуар: сохрани копию на Диск, на другом телефоне открой «Восстановить из копии» и выбери файл из Google Диска.
+        </p>
 
         {msg && <p className="center script" style={{ marginTop: 16, fontSize: '1.2rem' }}>{msg}</p>}
         <div className="spacer" />
