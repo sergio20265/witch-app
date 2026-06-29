@@ -5,6 +5,18 @@ It is meant as a handoff map for future Claude Code sessions.
 
 ## Changelog
 
+### 2.13 (2026-06-29) — Claude Code: per-type interactions + skill acceleration
+
+- **Per-type familiar interactions** (`interactionsByType` in `src/lib/path.ts`):
+  2 flavored templates for each of the 13 types; typed familiars draw from their
+  own + the 7 generic templates, neutral universals use only the generic ones.
+- **"Own familiar speeds skills" strengthened**: `familiarAffinityBonus` no
+  longer only amplifies already-granted affinity — each active step a familiar
+  pushes its own type (bond ≥3 → +1, ≥8 → +2; two stack; mixed pair still muted).
+- **Own-path mastery shown in profile** (`Мастерство пути · <tier>`) from
+  affinity to the witch's own type, so the acceleration is visible.
+- Bump 2.12 -> 2.13 (versionCode 23).
+
 ### 2.12 (2026-06-29) — Claude Code: familiar roster, dragons, scenes
 
 - **+16 familiars** (`src/data/path.ts`): a second per witch type (panther, unicorn,

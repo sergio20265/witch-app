@@ -6,7 +6,7 @@ import { useLocalStorage, readStore } from '../storage/useLocalStorage';
 import { shareCard } from '../lib/shareCard';
 import type { PathState, PathFamiliarState } from '../storage/types';
 import { activeFamiliars, befriendedDragons, defaultPathState, familiarBondLabel, hasSecondFamiliarSlot } from '../lib/path';
-import { identityFor, craftGiftsFor, craftTierLabel } from '../data/identities';
+import { identityFor, craftGiftsFor, craftTier, craftTierLabel } from '../data/identities';
 import { familiarById, familiarAffinity, trinketById, trinkets as allTrinkets, dragonById } from '../data/path';
 import { familiarArtById, familiarIconById } from '../assets';
 import { formatShortDate } from '../lib/date';
@@ -115,6 +115,26 @@ export function MyProfile() {
           </div>
         </div>
         {identity.description && <p className="identity-desc">{identity.description}</p>}
+
+        {/* Мастерство своего пути — растёт быстрее со «своим» фамильяром */}
+        {(() => {
+          const ownPoints = path.affinity[identity.id] ?? 0;
+          if (craftTier(ownPoints) <= 0) return null;
+          return (
+            <>
+              <h2 className="section-title">Мастерство пути · {craftTierLabel(ownPoints)}</h2>
+              <div className="skill-card">
+                <span className="skill-card__glyph">{identity.glyph}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h3 className="skill-card__title">{identity.label}</h3>
+                  {craftGiftsFor(identity.id, ownPoints).map((g, i) => (
+                    <p key={i} className="skill-card__gift">{g}</p>
+                  ))}
+                </div>
+              </div>
+            </>
+          );
+        })()}
 
         {/* Фамильяр */}
         <h2 className="section-title">Фамильяр</h2>
