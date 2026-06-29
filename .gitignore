@@ -20,3 +20,13 @@ android/capacitor-cordova-android-plugins/
 android/local.properties
 *.keystore
 *.jks
+
+# Root image sources
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+/*.gif
+/*.svg
+/*.avif
+/*.bmp

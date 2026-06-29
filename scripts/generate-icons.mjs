@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
-const SRC  = path.join(ROOT, 'icon.png');
+const SRC  = path.join(ROOT, 'codex-img', 'icon.png');
 const RES  = path.join(ROOT, 'android/app/src/main/res');
 
 // density → размер иконки в px
