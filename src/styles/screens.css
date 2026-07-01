@@ -985,6 +985,48 @@
 }
 
 /* ===== Моя тропинка ===== */
+.path-attention {
+  margin: 8px 0 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: linear-gradient(160deg, rgba(15, 26, 20, 0.72), rgba(28, 46, 34, 0.62));
+  border: 1px solid color-mix(in srgb, var(--path-accent, var(--gold-soft)) 28%, transparent);
+}
+.path-attention__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.78rem;
+  color: var(--text-faint);
+}
+.path-attention__top strong {
+  color: var(--path-accent, var(--gold-soft));
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: right;
+}
+.path-attention__meter {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+  margin: 9px 0 8px;
+}
+.path-attention__meter span {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(232, 226, 212, 0.12);
+}
+.path-attention__meter span.is-lit {
+  background: var(--path-accent, var(--gold-soft));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--path-accent, var(--gold-soft)) 44%, transparent);
+}
+.path-attention p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
 .path-scene-art {
   width: 100%;
   aspect-ratio: 3 / 2;

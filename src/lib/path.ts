@@ -15,7 +15,7 @@ import { identityFor } from '../data/identities';
 import type { PathState, PathLogEntry, PathFamiliarState } from '../storage/types';
 
 export function defaultPathState(): PathState {
-  return { step: 0, stepsToday: 0, affinity: {}, skills: [], trinkets: [], seen: [], log: [] };
+  return { step: 0, stepsToday: 0, affinity: {}, skills: [], trinkets: [], seen: [], log: [], forestAttention: 0 };
 }
 
 // FNV-1a + финальное перемешивание (xmur3). Без перемешивания соседние шаги
@@ -40,6 +40,43 @@ const DRAGON_CHANCE = 1;
 /** Шанс познакомиться с драконом на втором подарочном шаге зелёной ведьмы. */
 const GIFT_DRAGON_CHANCE = 25;
 const FAMILIAR_EVENT_CHANCE = 12;
+const MAX_FOREST_ATTENTION = 6;
+
+export function forestAttentionLevel(state: PathState): number {
+  return Math.max(0, Math.min(MAX_FOREST_ATTENTION, state.forestAttention ?? 0));
+}
+
+export function forestAttentionLabel(state: PathState): string {
+  const level = forestAttentionLevel(state);
+  if (level >= 5) return 'лес всматривается';
+  if (level >= 3) return 'лес прислушивается';
+  if (level >= 1) return 'тихий шорох';
+  return 'тропа спокойна';
+}
+
+export function forestAttentionHint(state: PathState): string {
+  const level = forestAttentionLevel(state);
+  if (level >= 5) return 'События чаще выходят навстречу, а тихие шаги становятся реже.';
+  if (level >= 3) return 'Тропа заметила твой ритм и может ответить более живо.';
+  if (level >= 1) return 'Где-то рядом шелестит ответ на твои решения.';
+  return 'Лес дышит ровно и дает идти без спешки.';
+}
+
+function shiftForestAttention(state: PathState, delta: number): PathState {
+  if (delta === 0) return state;
+  const forestAttention = Math.max(0, Math.min(MAX_FOREST_ATTENTION, forestAttentionLevel(state) + delta));
+  return { ...state, forestAttention };
+}
+
+function encounterAttentionDelta(identityId: string, affinity: Record<string, number>, trinkets: string[]): number {
+  const own = affinity[identityId] ?? 0;
+  const other = Object.entries(affinity).reduce((sum, [id, value]) => id === identityId ? sum : sum + Math.max(0, value), 0);
+  let delta = 0;
+  if (own > 0 && other === 0) delta -= 1;
+  if (other > 0) delta += 1;
+  if (trinkets.length > 0) delta += 1;
+  return Math.max(-1, Math.min(2, delta));
+}
 
 export function stepsLeftToday(state: PathState, today: string): number {
   const used = state.lastStepDate === today ? state.stepsToday : 0;
@@ -139,7 +176,7 @@ function dragonChance(state: PathState, identityId: string): number {
   // Пара «свой + чужой» глушит влияние на ведьму — в т.ч. не разгоняет драконов.
   if (influence.muted) return DRAGON_CHANCE;
   const ownBond = influence.own.reduce((sum, f) => sum + Math.max(0, f.bond), 0);
-  return Math.min(5, DRAGON_CHANCE + Math.floor(ownBond / 5));
+  return Math.min(6, DRAGON_CHANCE + Math.floor(ownBond / 5) + Math.floor(forestAttentionLevel(state) / 3));
 }
 
 /** С какими драконами уже подружились (с учётом старого булева поля). */
@@ -177,6 +214,8 @@ export interface FamiliarInteraction {
   text: string;
   choices: FamiliarInteractionChoice[];
 }
+
+export type ForestAttentionChoice = 'hide' | 'press';
 
 interface InteractionTemplate {
   title: string;
@@ -421,6 +460,7 @@ function deriveFamiliarInteraction(state: PathState, identityId: string, seed: n
 export type PathStep =
   | { kind: 'rest' }
   | { kind: 'quiet'; text: string }
+  | { kind: 'attention'; level: number }
   | { kind: 'event'; event: PathEvent }
   | { kind: 'familiar'; familiarId: string }
   | { kind: 'familiarEvent'; interaction: FamiliarInteraction }
@@ -488,6 +528,11 @@ export function deriveStep(state: PathState, identityId: string, today: string):
   const target = pendingCrossroad(state, identityId);
   if (target) return { kind: 'crossroad', targetId: target };
 
+  const attention = forestAttentionLevel(state);
+  if (attention >= 4 && hash(`attention-${seed}-${state.step}`) % 100 < 18 + attention * 7) {
+    return { kind: 'attention', level: attention };
+  }
+
   // Редкая случайная встреча с драконом (пока остались незнакомые).
   if (hash(`dragon-${seed}-${state.step}`) % 100 < dragonChance(state, identityId)) {
     const did = pickDragon(state, seed);
@@ -510,7 +555,7 @@ export function deriveStep(state: PathState, identityId: string, today: string):
   }
 
   const eligible = eligibleEvents(state, identityId);
-  const eventChance = Math.min(78, famStart + famChance + 56 + rareEventBoost(state, identityId) * 5);
+  const eventChance = Math.min(86, famStart + famChance + 56 + rareEventBoost(state, identityId) * 5 + forestAttentionLevel(state) * 3);
   if (roll < eventChance && eligible.length > 0) {
     const rare = eligible.filter(grantsAmulet);
     const boost = rareEventBoost(state, identityId);
@@ -544,11 +589,30 @@ function pushLog(state: PathState, entry: PathLogEntry): PathLogEntry[] {
 }
 
 export function commitQuiet(state: PathState, today: string): PathState {
-  return bumpStep(state, today);
+  return shiftForestAttention(bumpStep(state, today), -1);
+}
+
+export function commitForestAttention(
+  state: PathState,
+  choice: ForestAttentionChoice,
+  today: string,
+): { state: PathState; outcome: string; note?: string } {
+  const s = bumpStep(state, today);
+  if (choice === 'hide') {
+    const next = shiftForestAttention(s, -3);
+    const outcome = 'Ты останавливаешься, гасишь лишние движения и даёшь тропе забыть твой шум. Ветви расходятся мягче.';
+    const log = pushLog(next, { date: today, eventId: 'forest-attention', choice: 'Затаиться и слушать', outcome });
+    return { state: { ...next, log }, outcome, note: 'Внимание леса заметно снизилось.' };
+  }
+
+  const next = shiftForestAttention({ ...s, bonusSteps: (s.bonusSteps ?? 0) + 1 }, 1);
+  const outcome = 'Ты идёшь напролом, пока лес смотрит прямо на тебя. Дорога становится резче, зато следующий шаг даётся сверх обычного темпа.';
+  const log = pushLog(next, { date: today, eventId: 'forest-attention', choice: 'Идти напролом', outcome });
+  return { state: { ...next, log }, outcome, note: 'Получен один бонусный шаг, но лес стал внимательнее.' };
 }
 
 export function commitFamiliar(state: PathState, familiarId: string, adopt: boolean, today: string): PathState {
-  const s = bumpStep(state, today);
+  const s = shiftForestAttention(bumpStep(state, today), adopt ? -1 : 1);
   if (!adopt) return s;
   const companions = activeFamiliars(s);
   const existing = companions.find((f) => f.id === familiarId);
@@ -566,7 +630,7 @@ export function commitFamiliar(state: PathState, familiarId: string, adopt: bool
 }
 
 export function commitDragon(state: PathState, dragonId: string, adopt: boolean, today: string): PathState {
-  const s = bumpStep(state, today);
+  const s = shiftForestAttention(bumpStep(state, today), adopt ? -1 : 1);
   if (!adopt) return s;
   const have = befriendedDragons(s);
   const dragonFriends = have.includes(dragonId) ? have : [...have, dragonId];
@@ -589,7 +653,8 @@ export function commitFamiliarInteraction(
 ): { state: PathState; learned: string[]; left?: string; unlockedSecond?: boolean } {
   const before = activeFamiliars(state);
   const beforeCompanion = before.find((f) => f.id === interaction.familiarId);
-  const s = bumpStep(state, today);
+  const attentionDelta = choice.bond > 0 ? -1 : choice.bond < 0 ? 1 : 0;
+  const s = shiftForestAttention(bumpStep(state, today), attentionDelta + encounterAttentionDelta(identityId, choice.affinity ?? {}, []));
   const updated = before
     .map((f) => f.id === interaction.familiarId ? { ...f, bond: clampBond(f.bond + choice.bond) } : f)
     .filter((f) => f.bond > FAMILIAR_BOND_MIN);
@@ -620,7 +685,7 @@ export function commitEncounter(
   identityId: string,
   today: string,
 ): { state: PathState; learned: string[] } {
-  const s = bumpStep(state, today);
+  const s = shiftForestAttention(bumpStep(state, today), encounterAttentionDelta(identityId, res.affinity, res.trinkets));
 
   const affinity = { ...s.affinity };
   const boostedAffinity = familiarAffinityBonus(s, identityId, res.affinity);
@@ -657,7 +722,7 @@ export function commitCrossroad(
   accept: boolean,
   today: string,
 ): PathState {
-  const s = bumpStep(state, today);
+  const s = shiftForestAttention(bumpStep(state, today), accept ? 1 : -1);
   const seen = [...s.seen, 'crossroad-' + targetId];
   const label = identityFor(targetId).label;
 

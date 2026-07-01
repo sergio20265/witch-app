@@ -6,7 +6,8 @@ import { useLocalStorage, readStore, writeStore } from '../storage/useLocalStora
 import type { PathState } from '../storage/types';
 import {
   defaultPathState, deriveStep, stepsLeftToday,
-  activeFamiliars, commitQuiet, commitFamiliar, commitEncounter, commitCrossroad, commitDragon, commitFamiliarInteraction,
+  activeFamiliars, commitQuiet, commitFamiliar, commitEncounter, commitCrossroad, commitDragon, commitFamiliarInteraction, commitForestAttention,
+  forestAttentionHint, forestAttentionLabel, forestAttentionLevel,
 } from '../lib/path';
 import { crossroadFlavor, type PathBranch, type PathEvent, type PathNode } from '../data/pathEvents';
 import { identityFor } from '../data/identities';
@@ -28,6 +29,9 @@ export function MyPath() {
   const today = todayISO();
   const left = stepsLeftToday(state, today);
   const step = deriveStep(state, identity.id, today);
+  const attentionLevel = forestAttentionLevel(state);
+  const attentionLabel = forestAttentionLabel(state);
+  const attentionHint = forestAttentionHint(state);
 
   // Прохождение события: текущий узел + накопленные эффекты ветки.
   const [node, setNode] = useState<string | null>(null);
@@ -54,6 +58,8 @@ export function MyPath() {
       name = step.event.title; text = nodeText(cur, identity.id);
     } else if (step.kind === 'quiet') {
       text = step.text;
+    } else if (step.kind === 'attention') {
+      name = 'Внимание леса'; text = 'Лес смотрит слишком пристально. Можно затаиться или пройти напролом.';
     } else if (step.kind === 'familiar') {
       const fam = familiarById(step.familiarId);
       name = fam?.name ?? name; text = fam?.blurb ?? '';
@@ -142,6 +148,12 @@ export function MyPath() {
     });
   }
 
+  function chooseForestAttention(choice: 'hide' | 'press') {
+    const res = commitForestAttention(state, choice, today);
+    setState(res.state);
+    setResult({ outcome: res.outcome, learned: [], note: res.note });
+  }
+
   // ----- Рендер -----
   const usedToday = state.lastStepDate === today ? state.stepsToday : 0;
 
@@ -153,6 +165,19 @@ export function MyPath() {
           subtitle={`${identity.label} · пройдено шагов: ${state.step}`}
           action={<Link to="/profile" className="chip" role="button">профиль</Link>}
         />
+
+        <div className="path-attention rise" aria-label={`Внимание леса: ${attentionLabel}`}>
+          <div className="path-attention__top">
+            <span>Внимание леса</span>
+            <strong>{attentionLabel}</strong>
+          </div>
+          <div className="path-attention__meter" aria-hidden>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <span key={i} className={i < attentionLevel ? 'is-lit' : ''} />
+            ))}
+          </div>
+          <p>{attentionHint}</p>
+        </div>
 
         {result ? (
           <div className="path-card rise">
@@ -190,6 +215,24 @@ export function MyPath() {
                 <button className="btn btn--primary btn--block" onClick={() => { setState(commitQuiet(state, today)); }}>
                   Идти дальше
                 </button>
+              </div>
+            )}
+
+            {step.kind === 'attention' && (
+              <div className="path-card rise">
+                <div className="eyebrow">Внимание леса</div>
+                <p className="path-scene-text">
+                  Тропа вдруг становится слишком тихой. Листья не шевелятся, тень под деревьями сгущается,
+                  и кажется, что каждый следующий шаг звучит громче обычного.
+                </p>
+                <div className="stack stack--tight">
+                  <button className="path-choice" onClick={() => chooseForestAttention('hide')}>
+                    Затаиться и слушать
+                  </button>
+                  <button className="path-choice" onClick={() => chooseForestAttention('press')}>
+                    Идти напролом
+                  </button>
+                </div>
               </div>
             )}
 
@@ -338,6 +381,7 @@ function stepArtUrl(step: { kind: string; event?: PathEvent; familiarId?: string
   if (step.kind === 'familiarEvent' && step.interaction) return familiarArtById[step.interaction.familiarId] ?? pathArtFor('path-familiar');
   if (step.kind === 'dragon') return pathArtFor(dragonById(step.dragonId)?.art ?? 'path-dragon');
   if (step.kind === 'crossroad') return pathArtFor('path-crossroad');
+  if (step.kind === 'attention') return pathArtFor('path-storm-10');
   if (identityId === 'city') return pathArtFor(pickFrom(cityPathArt, 'quiet-city'));
   return pathArtFor('path-quiet');
 }
