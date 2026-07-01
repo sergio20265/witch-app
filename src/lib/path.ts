@@ -12,7 +12,7 @@ import {
   familiars, familiarAffinity, trinkets, dragons,
 } from '../data/path';
 import { identityFor } from '../data/identities';
-import type { PathState, PathLogEntry, PathFamiliarState } from '../storage/types';
+import type { PathState, PathLogEntry, PathFamiliarState, PathAltarKind, PathPotionEffect } from '../storage/types';
 
 export function defaultPathState(): PathState {
   return { step: 0, stepsToday: 0, affinity: {}, skills: [], trinkets: [], seen: [], log: [], forestAttention: 0 };
@@ -48,8 +48,8 @@ export function forestAttentionLevel(state: PathState): number {
 
 export function forestAttentionLabel(state: PathState): string {
   const level = forestAttentionLevel(state);
-  if (level >= 5) return 'лес всматривается';
-  if (level >= 3) return 'лес прислушивается';
+  if (level >= 5) return 'путь всматривается';
+  if (level >= 3) return 'путь прислушивается';
   if (level >= 1) return 'тихий шорох';
   return 'тропа спокойна';
 }
@@ -59,7 +59,7 @@ export function forestAttentionHint(state: PathState): string {
   if (level >= 5) return 'События чаще выходят навстречу, а тихие шаги становятся реже.';
   if (level >= 3) return 'Тропа заметила твой ритм и может ответить более живо.';
   if (level >= 1) return 'Где-то рядом шелестит ответ на твои решения.';
-  return 'Лес дышит ровно и дает идти без спешки.';
+  return 'Путь дышит ровно и дает идти без спешки.';
 }
 
 function shiftForestAttention(state: PathState, delta: number): PathState {
@@ -76,6 +76,193 @@ function encounterAttentionDelta(identityId: string, affinity: Record<string, nu
   if (other > 0) delta += 1;
   if (trinkets.length > 0) delta += 1;
   return Math.max(-1, Math.min(2, delta));
+}
+
+type AltarTag =
+  | 'forest' | 'green' | 'hedge' | 'root' | 'flower' | 'luck'
+  | 'sea' | 'water' | 'lunar' | 'storm' | 'threshold'
+  | 'city' | 'home' | 'hearth' | 'kitchen' | 'practical' | 'sound'
+  | 'witch' | 'rune' | 'mystic' | 'astral' | 'sun' | 'portable' | 'air';
+
+const trinketTags: Record<string, AltarTag[]> = {
+  leaf: ['forest', 'green'],
+  twig: ['forest', 'green', 'root'],
+  pebble: ['city', 'practical', 'threshold'],
+  acorn: ['forest', 'root'],
+  pinecone: ['forest', 'root'],
+  shell: ['sea', 'water'],
+  feather: ['air', 'portable'],
+  wildflower: ['forest', 'flower'],
+  nest: ['home', 'hearth', 'air'],
+  'holed-stone': ['sea', 'water', 'threshold'],
+  'candle-stub': ['witch', 'hearth', 'portable'],
+  'dried-flower': ['forest', 'flower', 'mystic'],
+  'old-key': ['city', 'threshold', 'practical'],
+  amber: ['forest', 'sun', 'root'],
+  bell: ['city', 'sound', 'mystic'],
+  clover: ['forest', 'luck', 'green'],
+  'charm-bag': ['witch', 'portable', 'threshold'],
+  mirror: ['city', 'mystic', 'lunar'],
+  'sig-witch': ['witch', 'portable'],
+  'sig-green': ['forest', 'green', 'root'],
+  'sig-hedge': ['forest', 'hedge', 'threshold'],
+  'sig-kitchen': ['kitchen', 'home', 'practical'],
+  'sig-hearth': ['hearth', 'home'],
+  'sig-lunar': ['lunar', 'water', 'mystic'],
+  'sig-sun': ['sun', 'flower', 'luck'],
+  'sig-sea': ['sea', 'water'],
+  'sig-storm': ['storm', 'air', 'water'],
+  'sig-astral': ['astral', 'lunar', 'mystic'],
+  'sig-mystic': ['mystic', 'threshold'],
+  'sig-rune': ['rune', 'threshold'],
+  'sig-city': ['city', 'practical'],
+};
+
+interface AltarProfile {
+  primary: string[];
+  secondary: string[];
+  tags: AltarTag[];
+  multiplier: number;
+  calmCap: number;
+  eventCap: number;
+  rareCap: number;
+  strongHint: string;
+  softHint: string;
+}
+
+const altarProfiles: Record<PathAltarKind, AltarProfile> = {
+  forest: {
+    primary: ['green', 'hedge'],
+    secondary: ['witch', 'rune-witch', 'sun'],
+    tags: ['forest', 'green', 'hedge', 'root', 'flower', 'luck'],
+    multiplier: 1,
+    calmCap: 3,
+    eventCap: 8,
+    rareCap: 2,
+    strongHint: 'Лесной алтарь лучше всего успокаивает внимание пути: ветки, корни и зелёные обереги гасят лишний шум.',
+    softHint: 'Лесной алтарь ждёт лесных вещей: листа, веточки, жёлудя, янтаря или зелёной печати.',
+  },
+  city: {
+    primary: ['city', 'hearth', 'kitchen'],
+    secondary: ['rune-witch', 'mystic', 'witch'],
+    tags: ['city', 'home', 'hearth', 'kitchen', 'practical', 'sound'],
+    multiplier: 1,
+    calmCap: 2,
+    eventCap: 11,
+    rareCap: 2,
+    strongHint: 'Городской алтарь лучше выводит к практичным находкам и событиям: ключи, зеркала, соль, угольки и уличные знаки работают особенно ясно.',
+    softHint: 'Городскому алтарю нужны вещи улиц и дома: ключ, зеркало, колокольчик, соль, уголёк или городская печать.',
+  },
+  sea: {
+    primary: ['sea', 'storm'],
+    secondary: ['lunar', 'mystic', 'astral'],
+    tags: ['sea', 'water', 'lunar', 'storm', 'threshold'],
+    multiplier: 1.08,
+    calmCap: 2,
+    eventCap: 10,
+    rareCap: 3,
+    strongHint: 'Морской алтарь зовёт приливы, пороги и редкие знаки: ракушки, лунные камни и грозовое стекло звучат здесь сильнее всего.',
+    softHint: 'Морскому алтарю нужны вода и граница: ракушка, камешек с дырочкой, лунный камень, морская или грозовая печать.',
+  },
+  bag: {
+    primary: ['witch', 'green', 'hedge', 'kitchen', 'hearth', 'lunar', 'sun', 'sea', 'storm', 'astral', 'mystic', 'rune-witch', 'city'],
+    secondary: [],
+    tags: ['portable', 'witch', 'threshold', 'air', 'mystic', 'practical'],
+    multiplier: 0.68,
+    calmCap: 1,
+    eventCap: 6,
+    rareCap: 1,
+    strongHint: 'Дорожный мини-алтарь принимает почти всё, но работает тише больших алтарей: он хорош как универсальная опора в пути.',
+    softHint: 'Мини-алтарь универсален, но особенно любит личные и переносные вещи: свечу, ладанку, печать, перо или маленький знак.',
+  },
+};
+
+export interface AltarEffect {
+  active: boolean;
+  calm: number;
+  eventBoost: number;
+  rareBoost: number;
+  power: number;
+  witchMatch: number;
+  itemMatch: number;
+  itemMax: number;
+  label: string;
+  hint: string;
+  parts: string[];
+}
+
+export function altarEffect(state: PathState, identityId?: string): AltarEffect {
+  const altar = state.altar;
+  const slots = (altar?.slots ?? []).filter((id) => state.trinkets.includes(id));
+  const empty = {
+    active: false,
+    calm: 0,
+    eventBoost: 0,
+    rareBoost: 0,
+    power: 0,
+    witchMatch: 0,
+    itemMatch: 0,
+    itemMax: 0,
+    label: 'алтарь молчит',
+    hint: 'Положи на алтарь найденные вещи, чтобы путь начал отвечать.',
+    parts: [],
+  };
+  if (!altar || slots.length === 0) {
+    return empty;
+  }
+
+  const profile = altarProfiles[altar.kind];
+  const theme = new Set(profile.tags);
+  const witchMatch = !identityId ? 0 : profile.primary.includes(identityId) ? 2 : profile.secondary.includes(identityId) ? 1 : 0;
+  const itemMax = slots.length * 4;
+  const itemMatch = slots.reduce((sum, id) => {
+    const tags = trinketTags[id] ?? [];
+    const overlap = tags.filter((tag) => theme.has(tag)).length;
+    const kindBonus = trinkets.find((t) => t.id === id)?.kind === 'amulet' ? 1 : 0;
+    return sum + Math.min(4, overlap + kindBonus);
+  }, 0);
+  const portableBonus = altar.kind === 'bag' && slots.some((id) => (trinketTags[id] ?? []).includes('portable')) ? 1 : 0;
+  const rawPower = itemMatch + witchMatch * 2 + portableBonus;
+  const power = Math.max(1, Math.round(rawPower * profile.multiplier));
+  const calm = Math.min(profile.calmCap, Math.floor(power / (altar.kind === 'forest' ? 3 : 4)));
+  const eventBoost = Math.min(profile.eventCap, slots.length + power + (altar.kind === 'city' ? 2 : 0));
+  const rareBoost = Math.min(profile.rareCap, Math.floor((power + (altar.kind === 'sea' ? 2 : 0)) / 4));
+  const label = power >= 10 ? 'сильный резонанс' : power >= 6 ? 'мягкий резонанс' : 'лёгкий отклик';
+  const parts = [
+    witchMatch >= 2 ? `ведьма созвучна: ${identityFor(identityId).label}` : witchMatch === 1 ? `частичное созвучие: ${identityFor(identityId).label}` : 'ведьма не усиливает алтарь',
+    `созвучие предметов: ${itemMatch}/${itemMax}`,
+    altar.kind === 'bag' ? 'мини-алтарь слабее, но универсален' : `сила ритуала: ${power}`,
+  ];
+  const hint = power >= 6 ? profile.strongHint : profile.softHint;
+  return { active: true, calm, eventBoost, rareBoost, power, witchMatch, itemMatch, itemMax, label, hint, parts };
+}
+
+function softenAttentionDelta(state: PathState, delta: number): number {
+  if (delta <= 0) return delta;
+  return Math.max(0, delta - altarEffect(state).calm - potionCalm(state));
+}
+
+function activePotionEffects(state: PathState): PathPotionEffect[] {
+  return (state.potionEffects ?? []).filter((effect) => effect.untilStep > state.step);
+}
+
+function potionRareBoost(state: PathState): number {
+  return activePotionEffects(state).reduce((sum, effect) => sum + (effect.rareBoost ?? 0), 0);
+}
+
+function potionEventBoost(state: PathState): number {
+  return activePotionEffects(state).reduce((sum, effect) => sum + (effect.eventBoost ?? 0), 0);
+}
+
+function potionCalm(state: PathState): number {
+  return activePotionEffects(state).reduce((sum, effect) => sum + (effect.calm ?? 0), 0);
+}
+
+export function potionEffectLabels(state: PathState): string[] {
+  return activePotionEffects(state).map((effect) => {
+    const left = Math.max(0, effect.untilStep - state.step);
+    return `${effect.label}: ещё ${left} шаг.`;
+  });
 }
 
 export function stepsLeftToday(state: PathState, today: string): number {
@@ -457,6 +644,83 @@ function deriveFamiliarInteraction(state: PathState, identityId: string, seed: n
   return { familiarId: companion.id, title: template.title, text: template.text(name), choices: template.choices(flavorType) };
 }
 
+export function deriveFamiliarNudge(state: PathState, identityId: string, today: string): FamiliarInteraction | null {
+  if (state.lastFamiliarNudgeDate === today) return null;
+  if (state.lastFamiliarGiftDate === today) return null;
+  if (activeFamiliars(state).length === 0) return null;
+  const seed = userSeed();
+  if (hash(`home-familiar-show-${seed}-${today}-${state.step}`) % 100 >= 55) return null;
+  const step = hash(`home-familiar-step-${seed}-${today}-${state.step}`) % 10000;
+  return deriveFamiliarInteraction({ ...state, step }, identityId, hash(`home-familiar-seed-${seed}-${today}`));
+}
+
+export interface FamiliarGift {
+  familiarId: string;
+  trinketId: string;
+  title: string;
+  text: string;
+}
+
+const familiarGiftPools: Record<string, string[]> = {
+  witch: ['candle-stub', 'charm-bag', 'mirror', 'sig-witch'],
+  green: ['leaf', 'twig', 'acorn', 'pinecone', 'amber', 'clover', 'sig-green'],
+  hedge: ['twig', 'feather', 'dried-flower', 'holed-stone', 'sig-hedge'],
+  kitchen: ['pebble', 'nest', 'bell', 'sig-kitchen'],
+  hearth: ['nest', 'candle-stub', 'amber', 'sig-hearth'],
+  lunar: ['shell', 'holed-stone', 'mirror', 'sig-lunar'],
+  sun: ['wildflower', 'amber', 'clover', 'sig-sun'],
+  sea: ['shell', 'holed-stone', 'pebble', 'sig-sea'],
+  storm: ['feather', 'holed-stone', 'bell', 'sig-storm'],
+  astral: ['feather', 'mirror', 'dried-flower', 'sig-astral'],
+  mystic: ['mirror', 'bell', 'charm-bag', 'sig-mystic'],
+  'rune-witch': ['pebble', 'old-key', 'charm-bag', 'sig-rune'],
+  city: ['pebble', 'old-key', 'bell', 'mirror', 'sig-city'],
+};
+
+function giftLine(familiarName: string, trinketName: string): string {
+  const lines = [
+    `${familiarName} оставляет у порога находку: ${trinketName}. Похоже, это было выбрано очень намеренно.`,
+    `${familiarName} возвращается с маленькой добычей и кладёт рядом ${trinketName}. Теперь это в твоей котомке.`,
+    `${familiarName} тихо зовёт тебя и показывает, что принёс: ${trinketName}. Вещь ложится к остальным находкам тропы.`,
+  ];
+  return lines[hash(`gift-line-${familiarName}-${trinketName}`) % lines.length];
+}
+
+export function deriveFamiliarGift(state: PathState, identityId: string, today: string): FamiliarGift | null {
+  if (state.lastFamiliarGiftDate === today) return null;
+  if (state.lastFamiliarNudgeDate === today) return null;
+  const companions = activeFamiliars(state).filter((f) => f.bond > 0);
+  if (companions.length === 0) return null;
+
+  const seed = userSeed();
+  if (hash(`home-familiar-gift-show-${seed}-${today}-${state.step}`) % 100 >= 38) return null;
+
+  const companion = companions[hash(`home-familiar-gift-who-${seed}-${today}-${state.step}`) % companions.length];
+  const famType = familiarAffinity[companion.id] ?? identityId;
+  const themed = familiarGiftPools[famType] ?? [];
+  const common = trinkets.filter((t) => t.kind === 'trifle').map((t) => t.id);
+  const rare = trinkets.filter((t) => t.kind === 'amulet').map((t) => t.id);
+  const rareChance = companion.bond >= 8 ? 34 : companion.bond >= 5 ? 22 : 10;
+  const wantsRare = hash(`home-familiar-gift-rare-${seed}-${today}-${companion.id}`) % 100 < rareChance;
+  const basePool = wantsRare
+    ? [...themed.filter((id) => rare.includes(id)), ...rare]
+    : [...themed, ...common];
+  const uniquePool = [...new Set(basePool)].filter((id) => !state.trinkets.includes(id));
+  if (uniquePool.length === 0) return null;
+
+  const trinketId = uniquePool[hash(`home-familiar-gift-item-${seed}-${today}-${state.step}`) % uniquePool.length];
+  const trinket = trinkets.find((t) => t.id === trinketId);
+  const familiar = familiars.find((f) => f.id === companion.id);
+  if (!trinket || !familiar) return null;
+  const familiarName = companion.name || familiar.name;
+  return {
+    familiarId: companion.id,
+    trinketId,
+    title: 'Находка фамильяра',
+    text: giftLine(familiarName, trinket.name),
+  };
+}
+
 export type PathStep =
   | { kind: 'rest' }
   | { kind: 'quiet'; text: string }
@@ -472,6 +736,7 @@ function eligibleEvents(state: PathState, identityId: string): PathEvent[] {
   return pathEvents.filter((e) => {
     if (e.tracks && !e.tracks.includes('*') && !e.tracks.includes(identityId)) return false;
     if (e.requireIdentity && !e.requireIdentity.includes(identityId)) return false;
+    if (e.minAttention != null && forestAttentionLevel(state) < e.minAttention) return false;
     return !state.seen.includes(e.id);
   });
 }
@@ -555,10 +820,11 @@ export function deriveStep(state: PathState, identityId: string, today: string):
   }
 
   const eligible = eligibleEvents(state, identityId);
-  const eventChance = Math.min(86, famStart + famChance + 56 + rareEventBoost(state, identityId) * 5 + forestAttentionLevel(state) * 3);
+  const altar = altarEffect(state, identityId);
+  const eventChance = Math.min(88, famStart + famChance + 56 + rareEventBoost(state, identityId) * 5 + forestAttentionLevel(state) * 3 + altar.eventBoost + potionEventBoost(state));
   if (roll < eventChance && eligible.length > 0) {
     const rare = eligible.filter(grantsAmulet);
-    const boost = rareEventBoost(state, identityId);
+    const boost = rareEventBoost(state, identityId) + altar.rareBoost + potionRareBoost(state);
     const pool = rare.length > 0 && hash(`rare-${seed}-${state.step}`) % 100 < boost * 18 ? rare : eligible;
     const ei = hash(`ev-${seed}-${state.step}`) % pool.length;
     return { kind: 'event', event: pool[ei] };
@@ -581,6 +847,7 @@ function bumpStep(state: PathState, today: string): PathState {
     bonusSteps: onBonus ? state.bonusSteps! - 1 : state.bonusSteps,
     lastStepDate: today,
     forcedSteps: rest && rest.length > 0 ? rest : undefined,
+    potionEffects: activePotionEffects(state),
   };
 }
 
@@ -600,19 +867,19 @@ export function commitForestAttention(
   const s = bumpStep(state, today);
   if (choice === 'hide') {
     const next = shiftForestAttention(s, -3);
-    const outcome = 'Ты останавливаешься, гасишь лишние движения и даёшь тропе забыть твой шум. Ветви расходятся мягче.';
+    const outcome = 'Ты останавливаешься, гасишь лишние движения и даёшь тропе забыть твой шум. Дорога расходится мягче.';
     const log = pushLog(next, { date: today, eventId: 'forest-attention', choice: 'Затаиться и слушать', outcome });
-    return { state: { ...next, log }, outcome, note: 'Внимание леса заметно снизилось.' };
+    return { state: { ...next, log }, outcome, note: 'Внимание пути заметно снизилось.' };
   }
 
   const next = shiftForestAttention({ ...s, bonusSteps: (s.bonusSteps ?? 0) + 1 }, 1);
-  const outcome = 'Ты идёшь напролом, пока лес смотрит прямо на тебя. Дорога становится резче, зато следующий шаг даётся сверх обычного темпа.';
+  const outcome = 'Ты идёшь напролом, пока путь смотрит прямо на тебя. Дорога становится резче, зато следующий шаг даётся сверх обычного темпа.';
   const log = pushLog(next, { date: today, eventId: 'forest-attention', choice: 'Идти напролом', outcome });
-  return { state: { ...next, log }, outcome, note: 'Получен один бонусный шаг, но лес стал внимательнее.' };
+  return { state: { ...next, log }, outcome, note: 'Получен один бонусный шаг, но путь стал внимательнее.' };
 }
 
 export function commitFamiliar(state: PathState, familiarId: string, adopt: boolean, today: string): PathState {
-  const s = shiftForestAttention(bumpStep(state, today), adopt ? -1 : 1);
+  const s = shiftForestAttention(bumpStep(state, today), softenAttentionDelta(state, adopt ? -1 : 1));
   if (!adopt) return s;
   const companions = activeFamiliars(s);
   const existing = companions.find((f) => f.id === familiarId);
@@ -630,7 +897,7 @@ export function commitFamiliar(state: PathState, familiarId: string, adopt: bool
 }
 
 export function commitDragon(state: PathState, dragonId: string, adopt: boolean, today: string): PathState {
-  const s = shiftForestAttention(bumpStep(state, today), adopt ? -1 : 1);
+  const s = shiftForestAttention(bumpStep(state, today), softenAttentionDelta(state, adopt ? -1 : 1));
   if (!adopt) return s;
   const have = befriendedDragons(s);
   const dragonFriends = have.includes(dragonId) ? have : [...have, dragonId];
@@ -640,6 +907,7 @@ export function commitDragon(state: PathState, dragonId: string, adopt: boolean,
 export interface EncounterResult {
   affinity: Record<string, number>;
   trinkets: string[];
+  attention?: number;
   choiceText: string;
   outcome: string;
 }
@@ -654,7 +922,7 @@ export function commitFamiliarInteraction(
   const before = activeFamiliars(state);
   const beforeCompanion = before.find((f) => f.id === interaction.familiarId);
   const attentionDelta = choice.bond > 0 ? -1 : choice.bond < 0 ? 1 : 0;
-  const s = shiftForestAttention(bumpStep(state, today), attentionDelta + encounterAttentionDelta(identityId, choice.affinity ?? {}, []));
+  const s = shiftForestAttention(bumpStep(state, today), softenAttentionDelta(state, attentionDelta + encounterAttentionDelta(identityId, choice.affinity ?? {}, [])));
   const updated = before
     .map((f) => f.id === interaction.familiarId ? { ...f, bond: clampBond(f.bond + choice.bond) } : f)
     .filter((f) => f.bond > FAMILIAR_BOND_MIN);
@@ -678,6 +946,42 @@ export function commitFamiliarInteraction(
   return { state: syncLegacy({ ...s, affinity, skills, log, secondFamiliarUnlocked: s.secondFamiliarUnlocked || unlockedSecond || undefined }, updated), learned, left, unlockedSecond };
 }
 
+export function commitFamiliarNudge(
+  state: PathState,
+  interaction: FamiliarInteraction,
+  choice: FamiliarInteractionChoice,
+  today: string,
+): { state: PathState; left?: string; unlockedSecond?: boolean } {
+  const before = activeFamiliars(state);
+  const beforeCompanion = before.find((f) => f.id === interaction.familiarId);
+  const updated = before
+    .map((f) => f.id === interaction.familiarId ? { ...f, bond: clampBond(f.bond + choice.bond) } : f)
+    .filter((f) => f.bond > FAMILIAR_BOND_MIN);
+  const unlockedSecond = !hasSecondFamiliarSlot(state) && updated.some((f) => f.bond >= SECOND_FAMILIAR_BOND);
+  const left = beforeCompanion && !updated.some((f) => f.id === beforeCompanion.id) ? beforeCompanion.id : undefined;
+  const base = syncLegacy({ ...state, lastFamiliarNudgeDate: today }, updated);
+  const log = pushLog(base, { date: today, eventId: 'familiar-home-' + interaction.familiarId, choice: choice.text, outcome: choice.outcome });
+  return { state: { ...base, log, secondFamiliarUnlocked: base.secondFamiliarUnlocked || unlockedSecond || undefined }, left, unlockedSecond };
+}
+
+export function commitFamiliarGift(
+  state: PathState,
+  gift: FamiliarGift,
+  today: string,
+): { state: PathState; added: boolean; outcome: string } {
+  const trinket = trinkets.find((t) => t.id === gift.trinketId);
+  const trinketName = trinket?.name ?? 'находка';
+  const trinketGlyph = trinket?.glyph ?? '✦';
+  const added = !state.trinkets.includes(gift.trinketId);
+  const nextTrinkets = added ? [...state.trinkets, gift.trinketId] : state.trinkets;
+  const outcome = added
+    ? `${trinketGlyph} ${trinketName} добавлен(а) в котомку.`
+    : `${trinketGlyph} ${trinketName} уже есть в котомке, но внимание всё равно приятно.`;
+  const base = { ...state, trinkets: nextTrinkets, lastFamiliarGiftDate: today };
+  const log = pushLog(base, { date: today, eventId: 'familiar-gift-' + gift.familiarId, choice: 'Принять находку', outcome });
+  return { state: { ...base, log }, added, outcome };
+}
+
 export function commitEncounter(
   state: PathState,
   event: PathEvent,
@@ -685,7 +989,10 @@ export function commitEncounter(
   identityId: string,
   today: string,
 ): { state: PathState; learned: string[] } {
-  const s = shiftForestAttention(bumpStep(state, today), encounterAttentionDelta(identityId, res.affinity, res.trinkets));
+  const s = shiftForestAttention(
+    bumpStep(state, today),
+    softenAttentionDelta(state, encounterAttentionDelta(identityId, res.affinity, res.trinkets) + (res.attention ?? 0)),
+  );
 
   const affinity = { ...s.affinity };
   const boostedAffinity = familiarAffinityBonus(s, identityId, res.affinity);
@@ -722,7 +1029,7 @@ export function commitCrossroad(
   accept: boolean,
   today: string,
 ): PathState {
-  const s = shiftForestAttention(bumpStep(state, today), accept ? 1 : -1);
+  const s = shiftForestAttention(bumpStep(state, today), softenAttentionDelta(state, accept ? 1 : -1));
   const seen = [...s.seen, 'crossroad-' + targetId];
   const label = identityFor(targetId).label;
 

@@ -1027,6 +1027,31 @@
   font-size: 0.78rem;
   line-height: 1.4;
 }
+.lore-note {
+  margin-top: 8px;
+  border-top: 1px solid rgba(201, 164, 92, 0.14);
+  padding-top: 8px;
+  color: var(--text-dim);
+}
+.lore-note summary {
+  cursor: pointer;
+  width: max-content;
+  max-width: 100%;
+  color: var(--gold-soft);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.lore-note p {
+  margin: 8px 0 0;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+.lore-note--altar {
+  margin: -2px 0 12px;
+  border-top: 0;
+  padding-top: 0;
+}
 .path-scene-art {
   width: 100%;
   aspect-ratio: 3 / 2;
@@ -1576,6 +1601,360 @@
 }
 .perm-banner:active { transform: scale(0.99); }
 .perm-banner__bell { font-size: 1.6rem; flex-shrink: 0; }
+
+/* ===== Алтарь ===== */
+.altar-hero {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  background: rgba(15, 26, 20, 0.75);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+}
+.altar-hero img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.altar-hero__shade {
+  position: absolute;
+  inset: auto 0 0;
+  height: 44%;
+  background: linear-gradient(180deg, transparent, rgba(6, 10, 8, 0.86));
+}
+.altar-hero__label {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 14px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.altar-hero__label span {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  color: var(--gold-soft);
+}
+.altar-hero__label strong {
+  flex-shrink: 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--moon);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.altar-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+}
+.altar-tabs button {
+  min-height: 40px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  color: var(--text-dim);
+  background: rgba(15, 26, 20, 0.62);
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+.altar-tabs button.is-active {
+  color: #22180b;
+  border-color: rgba(201, 164, 92, 0.8);
+  background: linear-gradient(180deg, var(--gold-soft), var(--gold-dim));
+}
+.altar-panel {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: rgba(15, 26, 20, 0.58);
+}
+.altar-hint {
+  margin: 0 0 12px;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.altar-slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.altar-slot {
+  min-height: 92px;
+  padding: 10px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(6, 10, 8, 0.35);
+  color: var(--text-dim);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+.altar-slot.is-active {
+  border-color: var(--gold);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px rgba(201, 164, 92, 0.25);
+}
+.altar-slot__glyph {
+  font-size: 1.45rem;
+  line-height: 1;
+}
+.altar-effect {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.altar-effect strong {
+  color: var(--gold-soft);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+.altar-effect span,
+.altar-effect em {
+  color: var(--text-dim);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  font-style: normal;
+}
+.altar-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+}
+.altar-stats span {
+  min-height: 34px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(201, 164, 92, 0.24);
+  background: rgba(201, 164, 92, 0.1);
+  color: var(--gold-soft);
+  text-align: center;
+  font-size: 0.74rem;
+  line-height: 1.2;
+}
+.altar-parts {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+.altar-inventory .trinket {
+  cursor: pointer;
+}
+.altar-inventory .trinket.is-picked {
+  border-color: var(--gold);
+  background: rgba(201, 164, 92, 0.16);
+}
+
+/* ===== Котелок ===== */
+.cauldron-panel {
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: rgba(15, 26, 20, 0.58);
+}
+.cauldron-bowl {
+  min-height: 96px;
+  margin-bottom: 12px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(201, 164, 92, 0.28);
+  background:
+    radial-gradient(circle at 50% 85%, rgba(127, 176, 176, 0.35), transparent 42%),
+    linear-gradient(180deg, rgba(6, 10, 8, 0.5), rgba(15, 26, 20, 0.72));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.cauldron-bowl span {
+  font-size: 2rem;
+  line-height: 1;
+}
+.cauldron-bowl strong {
+  color: var(--gold-soft);
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+}
+.cauldron-message {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(201, 164, 92, 0.1);
+  color: var(--text-dim);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+.potion-effects {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.potion-effects span {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(127, 176, 176, 0.24);
+  background: rgba(127, 176, 176, 0.1);
+  color: var(--moon);
+  font-size: 0.82rem;
+}
+.potion-recipe {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: rgba(15, 26, 20, 0.5);
+}
+.potion-recipe__glyph {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(201, 164, 92, 0.14);
+  font-size: 1.35rem;
+}
+.potion-recipe h3 {
+  margin: 0 0 4px;
+  color: var(--gold-soft);
+}
+.potion-recipe p {
+  margin: 0 0 8px;
+  color: var(--text-dim);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+.potion-recipe__ingredients {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.potion-recipe__ingredients span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.74rem;
+}
+
+/* ===== Зов фамильяра на главной ===== */
+.familiar-nudge {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 13px 14px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(201, 164, 92, 0.28);
+  background: rgba(15, 26, 20, 0.58);
+  color: var(--text);
+  text-align: left;
+}
+.familiar-nudge__glyph {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(201, 164, 92, 0.14);
+  font-size: 1.5rem;
+}
+.familiar-nudge--gift {
+  border-color: rgba(127, 176, 176, 0.28);
+  background: linear-gradient(160deg, rgba(15, 26, 20, 0.66), rgba(28, 46, 34, 0.54));
+}
+.familiar-nudge--gift .familiar-nudge__glyph {
+  background: rgba(127, 176, 176, 0.14);
+}
+.familiar-nudge__title {
+  color: var(--gold-soft);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+.familiar-nudge__hint {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  margin-top: 2px;
+}
+.familiar-home-sheet {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+.familiar-home-sheet__glyph {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(201, 164, 92, 0.14);
+  font-size: 1.55rem;
+}
+.familiar-home-sheet p {
+  margin: 4px 0 0;
+  color: var(--text);
+  line-height: 1.55;
+}
+.familiar-home-sheet--gift {
+  margin-bottom: 10px;
+}
+.familiar-gift-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(201, 164, 92, 0.24);
+  background: rgba(201, 164, 92, 0.08);
+}
+.familiar-gift-card > span {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(15, 26, 20, 0.58);
+  font-size: 1.45rem;
+}
+.familiar-gift-card strong {
+  display: block;
+  color: var(--gold-soft);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+.familiar-gift-card em {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-style: normal;
+}
 
 /* Переключатель «влияние пути на оформление» */
 .path-toggle {

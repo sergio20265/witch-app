@@ -37,11 +37,12 @@ export function MyPath() {
   const [node, setNode] = useState<string | null>(null);
   const [accAff, setAccAff] = useState<Record<string, number>>({});
   const [accTr, setAccTr] = useState<string[]>([]);
+  const [accAttention, setAccAttention] = useState(0);
   // Итоговая карточка после совершённого шага.
   const [result, setResult] = useState<{ outcome: string; learned: string[]; found?: string; note?: string } | null>(null);
 
   function resetEncounter() {
-    setNode(null); setAccAff({}); setAccTr([]);
+    setNode(null); setAccAff({}); setAccTr([]); setAccAttention(0);
   }
   function nextStep() {
     setResult(null);
@@ -59,7 +60,7 @@ export function MyPath() {
     } else if (step.kind === 'quiet') {
       text = step.text;
     } else if (step.kind === 'attention') {
-      name = 'Внимание леса'; text = 'Лес смотрит слишком пристально. Можно затаиться или пройти напролом.';
+      name = 'Внимание пути'; text = 'Путь смотрит слишком пристально. Можно затаиться или пройти напролом.';
     } else if (step.kind === 'familiar') {
       const fam = familiarById(step.familiarId);
       name = fam?.name ?? name; text = fam?.blurb ?? '';
@@ -84,15 +85,16 @@ export function MyPath() {
     const aff = { ...accAff };
     for (const [k, v] of Object.entries(b.affinity ?? {})) aff[k] = (aff[k] || 0) + v;
     const tr = b.grant?.trinket ? [...accTr, b.grant.trinket] : accTr;
+    const attention = accAttention + (b.attention ?? 0);
 
     if (b.to) {
-      setAccAff(aff); setAccTr(tr); setNode(b.to);
+      setAccAff(aff); setAccTr(tr); setAccAttention(attention); setNode(b.to);
       return;
     }
     const outcome = branchOutcome(b, identity.id);
     const { state: ns, learned } = commitEncounter(
       state, event,
-      { affinity: aff, trinkets: tr, choiceText: b.text, outcome },
+      { affinity: aff, trinkets: tr, attention, choiceText: b.text, outcome },
       identity.id, today,
     );
     setState(ns);
@@ -166,9 +168,9 @@ export function MyPath() {
           action={<Link to="/profile" className="chip" role="button">профиль</Link>}
         />
 
-        <div className="path-attention rise" aria-label={`Внимание леса: ${attentionLabel}`}>
+        <div className="path-attention rise" aria-label={`Внимание пути: ${attentionLabel}`}>
           <div className="path-attention__top">
-            <span>Внимание леса</span>
+            <span>Внимание пути</span>
             <strong>{attentionLabel}</strong>
           </div>
           <div className="path-attention__meter" aria-hidden>
@@ -177,6 +179,14 @@ export function MyPath() {
             ))}
           </div>
           <p>{attentionHint}</p>
+          <details className="lore-note">
+            <summary>Что это значит?</summary>
+            <p>
+              Внимание пути растёт, когда решения становятся резкими, шумными или тянут к разным ремёслам сразу.
+              Чем оно выше, тем чаще путь отвечает событиями и редкими поворотами, но спокойных шагов становится меньше.
+              Тихие решения, отдых, некоторые зелья и созвучный алтарь помогают снизить это внимание.
+            </p>
+          </details>
         </div>
 
         {result ? (
@@ -220,9 +230,9 @@ export function MyPath() {
 
             {step.kind === 'attention' && (
               <div className="path-card rise">
-                <div className="eyebrow">Внимание леса</div>
+                <div className="eyebrow">Внимание пути</div>
                 <p className="path-scene-text">
-                  Тропа вдруг становится слишком тихой. Листья не шевелятся, тень под деревьями сгущается,
+                  Тропа вдруг становится слишком тихой. Мир вокруг задерживает дыхание,
                   и кажется, что каждый следующий шаг звучит громче обычного.
                 </p>
                 <div className="stack stack--tight">

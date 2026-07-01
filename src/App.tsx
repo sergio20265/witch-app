@@ -24,6 +24,8 @@ import { RuneOfDay } from './screens/RuneOfDay';
 import { Tarot } from './screens/Tarot';
 import { MyPath } from './screens/MyPath';
 import { MyProfile } from './screens/MyProfile';
+import { Altar } from './screens/Altar';
+import { Potions } from './screens/Potions';
 import { Onboarding } from './screens/Onboarding';
 import { readStore } from './storage/useLocalStorage';
 
@@ -60,6 +62,8 @@ export default function App() {
           <Route path="tarot" element={<Tarot />} />
           <Route path="path" element={<MyPath />} />
           <Route path="profile" element={<MyProfile />} />
+          <Route path="altar" element={<Altar />} />
+          <Route path="potions" element={<Potions />} />
           <Route path="more" element={<More />} />
           <Route path="settings" element={<Settings />} />
         </Route>

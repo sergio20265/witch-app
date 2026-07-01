@@ -142,7 +142,10 @@ export const runeArtById: Record<string, string> = {
 /** Арт сцен «Моей тропинки»: src/assets/path/path-*.webp → ключ по art-id сцены. */
 const pathModules = import.meta.glob('./path/*.webp', { eager: true, import: 'default' }) as Record<string, string>;
 export const pathArtById: Record<string, string> = Object.fromEntries(
-  Object.entries(pathModules).map(([p, url]) => [p.slice(p.lastIndexOf('/') + 1, -'.webp'.length), url]),
+  Object.entries(pathModules).map(([p, url]) => {
+    const file = p.slice(p.lastIndexOf('/') + 1);
+    return [file.replace(/\.webp$/i, ''), url];
+  }),
 );
 
 /** Портреты фамильяров: src/assets/familiars/familiar-<id>.webp → ключ по id ('cat'). */

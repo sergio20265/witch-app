@@ -238,6 +238,8 @@ export function MyProfile() {
 
         {/* Котомка */}
         <h2 className="section-title">Котомка</h2>
+        <Link to="/altar" className="btn btn--primary btn--block" style={{ marginBottom: 12 }}>🕯️ Открыть алтарь</Link>
+        <Link to="/potions" className="btn btn--ghost btn--block" style={{ marginBottom: 12 }}>🫧 Открыть котелок</Link>
         {owned.length === 0 ? (
           <p className="muted">Пуста. На тропе попадаются и мелочи, и редкие обереги.</p>
         ) : (

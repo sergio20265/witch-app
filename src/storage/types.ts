@@ -139,6 +139,24 @@ export interface PathFamiliarState {
   bond: number;                       // связь: -5 уходит, 10 открывает второй слот
 }
 
+export type PathAltarKind = 'forest' | 'city' | 'sea' | 'bag';
+
+export interface PathAltarState {
+  kind: PathAltarKind;
+  slots: string[];
+}
+
+export type PathPotionEffectKind = 'luck' | 'focus' | 'calm';
+
+export interface PathPotionEffect {
+  kind: PathPotionEffectKind;
+  untilStep: number;
+  label: string;
+  rareBoost?: number;
+  eventBoost?: number;
+  calm?: number;
+}
+
 export interface PathState {
   step: number;                       // сколько шагов пройдено всего
   lastStepDate?: string;              // yyyy-mm-dd последнего шага
@@ -157,7 +175,13 @@ export interface PathState {
   forcedSteps?: ForcedStep[];         // очередь гарантированных шагов (подарок-извинение)
   bonusSteps?: number;                // доп. шаги сверх дневного лимита (не считаются в stepsToday)
   famCooldownUntil?: number;          // до какого step фамильяры не встречаются (после принятия — 4 шага)
+  lastFamiliarNudgeDate?: string;     // yyyy-mm-dd последнего вне-шагового взаимодействия
+  lastFamiliarGiftDate?: string;      // yyyy-mm-dd последней принесённой фамильяром находки
   forestAttention?: number;           // 0..6: насколько тропа присматривается к шагам
+  altar?: PathAltarState;             // выбранный алтарь и предметы, лежащие на нём
+  knownPotionRecipes?: string[];       // открытые экспериментами рецепты зелий
+  potionEffects?: PathPotionEffect[];  // временные эффекты зелий на тропе
+  lastPotionBrewDate?: string;         // yyyy-mm-dd последней успешной варки
 }
 
 /** Гарантированный шаг из очереди подарка: фамильяр-«извинение» / медведь / шанс дракона. */
