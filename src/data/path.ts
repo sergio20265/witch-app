@@ -1,6 +1,7 @@
 // «Моя тропинка» — справочники фамильяров, оберегов и пороги прогресса.
 
-export const STEPS_PER_DAY = 2;
+export const STEPS_PER_DAY = 4;
+export const STEPS_PER_WINDOW = 2;
 /** Сколько очков склонности → перенять ремесло (навык) этого типажа. */
 export const SKILL_THRESHOLD = 3;
 /** Сколько очков → открыть перекрёсток смены типажа. */

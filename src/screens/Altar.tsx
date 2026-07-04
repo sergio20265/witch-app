@@ -26,6 +26,13 @@ function cleanSlots(slots: string[], owned: Set<string>): string[] {
   });
 }
 
+function altarResponseArt(kind: PathAltarKind, slots: string[], power: number): string {
+  if (slots.length === 0) return 'altar-response-empty';
+  if (power < 6) return 'altar-response-weak';
+  if (power >= 10) return 'altar-response-strong';
+  return `altar-response-${kind}`;
+}
+
 export function Altar() {
   const [path, setPath] = useLocalStorage<PathState>('pathState', defaultPathState());
   const ownedIds = useMemo(() => new Set(path.trinkets), [path.trinkets]);
@@ -34,6 +41,7 @@ export function Altar() {
   const selected = ALTARS.find((a) => a.id === altar.kind) ?? ALTARS[3];
   const identity = identityFor(readStore<string>('userIdentity', ''));
   const effect = altarEffect({ ...path, altar: { ...altar, slots } }, identity.id);
+  const responseArt = altarResponseArt(altar.kind, slots, effect.power);
   const [activeSlot, setActiveSlot] = useState(0);
 
   const owned = path.trinkets
@@ -117,6 +125,7 @@ export function Altar() {
           {slots[activeSlot] && (
             <button className="btn btn--ghost btn--block" onClick={() => clearSlot(activeSlot)}>Убрать из выбранного места</button>
           )}
+          <img className="altar-response-art" src={pathArtFor(responseArt)} alt="" />
           <div className="altar-effect">
             <strong>{effect.active ? 'Действует' : 'Пока не действует'}</strong>
             <span>{effect.hint}</span>

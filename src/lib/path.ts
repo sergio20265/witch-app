@@ -7,12 +7,12 @@
 import { userSeed } from './seed';
 import { pathEvents, quietLinesFor, type PathEvent } from '../data/pathEvents';
 import {
-  STEPS_PER_DAY, SKILL_THRESHOLD, CROSSROAD_THRESHOLD,
+  STEPS_PER_DAY, STEPS_PER_WINDOW, SKILL_THRESHOLD, CROSSROAD_THRESHOLD,
   FAMILIAR_BOND_MIN, FAMILIAR_BOND_MAX, SECOND_FAMILIAR_BOND,
   familiars, familiarAffinity, trinkets, dragons,
 } from '../data/path';
 import { identityFor } from '../data/identities';
-import type { PathState, PathLogEntry, PathFamiliarState, PathAltarKind, PathPotionEffect } from '../storage/types';
+import type { PathState, PathLogEntry, PathFamiliarState, PathAltarKind, PathPotionEffect, PathDevelopmentState } from '../storage/types';
 
 export function defaultPathState(): PathState {
   return { step: 0, stepsToday: 0, affinity: {}, skills: [], trinkets: [], seen: [], log: [], forestAttention: 0 };
@@ -265,9 +265,88 @@ export function potionEffectLabels(state: PathState): string[] {
   });
 }
 
+function stepWindowKey(today: string, now = new Date()): string {
+  return `${today}-${now.getHours() < 12 ? 'am' : 'pm'}`;
+}
+
+function stepWindowLabel(now = new Date()): string {
+  return now.getHours() < 12 ? 'до полудня' : 'после полудня';
+}
+
+function nextStepWindowLabel(now = new Date()): string {
+  return now.getHours() < 12 ? 'после 12:00' : 'завтра после 00:00';
+}
+
+export interface PathStepPace {
+  left: number;
+  usedToday: number;
+  dailyLimit: number;
+  windowUsed: number;
+  windowLimit: number;
+  windowLabel: string;
+  nextWindowLabel: string;
+  bonus: number;
+}
+
+export function pathStepPace(state: PathState, today: string, now = new Date()): PathStepPace {
+  const usedToday = state.lastStepDate === today ? state.stepsToday : 0;
+  const currentWindow = stepWindowKey(today, now);
+  const windowUsed = state.stepWindowKey === currentWindow ? (state.stepWindowSteps ?? 0) : 0;
+  const dailyLeft = Math.max(0, STEPS_PER_DAY - usedToday);
+  const windowLeft = Math.max(0, STEPS_PER_WINDOW - windowUsed);
+  const bonus = state.bonusSteps ?? 0;
+  return {
+    left: Math.min(dailyLeft, windowLeft) + bonus,
+    usedToday,
+    dailyLimit: STEPS_PER_DAY,
+    windowUsed,
+    windowLimit: STEPS_PER_WINDOW,
+    windowLabel: stepWindowLabel(now),
+    nextWindowLabel: nextStepWindowLabel(now),
+    bonus,
+  };
+}
+
 export function stepsLeftToday(state: PathState, today: string): number {
-  const used = state.lastStepDate === today ? state.stepsToday : 0;
-  return Math.max(0, STEPS_PER_DAY - used) + (state.bonusSteps ?? 0);
+  return pathStepPace(state, today).left;
+}
+
+function advancePathDevelopment(state: PathState, identityId: string | undefined, today: string): PathState {
+  if (!identityId) return state;
+  const prev: PathDevelopmentState = state.development ?? { general: 0, byIdentity: {} };
+  const sameDay = prev.lastDate === today;
+  const identityToday = sameDay ? { ...(prev.identityToday ?? {}) } : {};
+  const generalToday = sameDay ? (prev.generalToday ?? 0) : 0;
+  const specificToday = identityToday[identityId] ?? 0;
+  const canGeneral = generalToday < 4;
+  const canSpecific = specificToday < 2;
+  const development: PathDevelopmentState = {
+    general: prev.general + (canGeneral ? 1 : 0),
+    byIdentity: {
+      ...prev.byIdentity,
+      [identityId]: (prev.byIdentity[identityId] ?? 0) + (canSpecific ? 1 : 0),
+    },
+    lastDate: today,
+    generalToday: generalToday + (canGeneral ? 1 : 0),
+    identityToday: {
+      ...identityToday,
+      [identityId]: specificToday + (canSpecific ? 1 : 0),
+    },
+  };
+  return { ...state, development };
+}
+
+export function pathDevelopmentSummary(state: PathState, identityId: string, today: string) {
+  const dev = state.development ?? { general: 0, byIdentity: {} };
+  const sameDay = dev.lastDate === today;
+  return {
+    general: dev.general,
+    specific: dev.byIdentity[identityId] ?? 0,
+    generalToday: sameDay ? (dev.generalToday ?? 0) : 0,
+    specificToday: sameDay ? (dev.identityToday?.[identityId] ?? 0) : 0,
+    generalDailyLimit: 4,
+    specificDailyLimit: 2,
+  };
 }
 
 /** Шанс встретить фамильяра: 0 на кулдауне после принятия, иначе 5/16. */
@@ -659,6 +738,221 @@ export interface FamiliarGift {
   trinketId: string;
   title: string;
   text: string;
+  art: string;
+}
+
+export interface FamiliarCare {
+  familiarId: string;
+  title: string;
+  text: string;
+  art: string;
+  actions: { text: string; outcome: string; art?: string }[];
+}
+
+export interface PathSpell {
+  id: string;
+  craft: string;
+  name: string;
+  glyph: string;
+  hint: string;
+  affinity?: Record<string, number>;
+  trinket?: string;
+  bonusSteps?: number;
+  attention?: number;
+  outcome: string;
+}
+
+export interface MagicChallenge {
+  id: string;
+  title: string;
+  text: string;
+  art: string;
+  choices: PathSpell[];
+}
+
+const pathSpells: PathSpell[] = [
+  {
+    id: 'root-listening',
+    craft: 'green',
+    name: 'Слух корней',
+    glyph: '🌿',
+    hint: 'услышать, где тропа прячет живую находку',
+    affinity: { green: 1 },
+    trinket: 'leaf',
+    attention: -1,
+    outcome: 'Ты прикладываешь ладонь к земле, и корни отвечают едва заметным теплом. В траве находится лист с прожилками, похожими на карту.',
+  },
+  {
+    id: 'hedge-thread',
+    craft: 'hedge',
+    name: 'Нить межи',
+    glyph: '🧵',
+    hint: 'пройти сквозь морок и не поднять шум',
+    affinity: { hedge: 1 },
+    attention: -2,
+    outcome: 'Ты вытягиваешь невидимую нить между здесь и там. Морок расходится мягко, будто занавес, и путь перестает следить так пристально.',
+  },
+  {
+    id: 'hearth-spark',
+    craft: 'hearth',
+    name: 'Искра очага',
+    glyph: '🔥',
+    hint: 'согреть путь и вернуть силы',
+    affinity: { hearth: 1 },
+    trinket: 'candle-stub',
+    bonusSteps: 1,
+    attention: -1,
+    outcome: 'Ты прячешь маленькую искру в ладонях. Она не обжигает, а греет, и дорога дает еще один лишний шаг.',
+  },
+  {
+    id: 'kitchen-pinch',
+    craft: 'kitchen',
+    name: 'Щепотка верного вкуса',
+    glyph: '🥄',
+    hint: 'понять, что из найденного пригодится в котелке',
+    affinity: { kitchen: 1 },
+    trinket: 'nest',
+    outcome: 'Ты пробуешь воздух на вкус и безошибочно выбираешь маленькую вещь для будущего варева. В котомке появляется уютная кухонная находка.',
+  },
+  {
+    id: 'moon-water',
+    craft: 'lunar',
+    name: 'Лунная гладь',
+    glyph: '🌙',
+    hint: 'увидеть отражение скрытого выбора',
+    affinity: { lunar: 1 },
+    trinket: 'mirror',
+    attention: -1,
+    outcome: 'Ты смотришь в тонкую лунную пленку на воде. Отражение показывает не лицо, а знак, который стоит взять с собой.',
+  },
+  {
+    id: 'sun-mark',
+    craft: 'sun',
+    name: 'Солнечная метка',
+    glyph: '☀️',
+    hint: 'попросить удачу лечь на следующий поворот',
+    affinity: { sun: 1 },
+    trinket: 'clover',
+    outcome: 'Ты ставишь на воздухе теплую метку. Она вспыхивает и гаснет, оставляя после себя маленький знак удачи.',
+  },
+  {
+    id: 'salt-call',
+    craft: 'sea',
+    name: 'Соленый зов',
+    glyph: '🐚',
+    hint: 'позвать прилив даже вдали от берега',
+    affinity: { sea: 1 },
+    trinket: 'shell',
+    outcome: 'Ты произносишь слово с привкусом соли. Где бы ни была тропа, она на миг пахнет морем, а у ног оказывается ракушка.',
+  },
+  {
+    id: 'storm-breath',
+    craft: 'storm',
+    name: 'Грозовое дыхание',
+    glyph: '⛈️',
+    hint: 'разогнать застой и открыть резкий короткий путь',
+    affinity: { storm: 1 },
+    bonusSteps: 1,
+    attention: 1,
+    outcome: 'Ты выдыхаешь навстречу ветру, и воздух отвечает. Тропа становится резче и быстрее, дарит лишний шаг, но тоже запоминает этот шум.',
+  },
+  {
+    id: 'star-map',
+    craft: 'astral',
+    name: 'Звездная карта',
+    glyph: '✨',
+    hint: 'увидеть большой рисунок пути',
+    affinity: { astral: 1 },
+    trinket: 'feather',
+    outcome: 'Ты соединяешь взглядом три далекие точки света. Между ними проступает маршрут, а рядом ложится легкое перо.',
+  },
+  {
+    id: 'veil-question',
+    craft: 'mystic',
+    name: 'Вопрос завесе',
+    glyph: '🔮',
+    hint: 'спросить у тайного слоя дороги',
+    affinity: { mystic: 1 },
+    trinket: 'bell',
+    outcome: 'Ты задаешь вопрос не вслух, а вниманием. Завеса отвечает звоном: маленький колокольчик оказывается у тебя в руке.',
+  },
+  {
+    id: 'rune-cut',
+    craft: 'rune-witch',
+    name: 'Рунный рез',
+    glyph: 'ᚱ',
+    hint: 'вырезать знак, который закрепляет выбор',
+    affinity: { 'rune-witch': 1 },
+    trinket: 'pebble',
+    attention: -1,
+    outcome: 'Ты проводишь знак по камню ногтем. Руна держится всего миг, но этого хватает: камешек становится твоим проводником.',
+  },
+  {
+    id: 'city-key',
+    craft: 'city',
+    name: 'Ключ улиц',
+    glyph: '🗝️',
+    hint: 'найти проход там, где его никто не замечает',
+    affinity: { city: 1 },
+    trinket: 'old-key',
+    outcome: 'Ты слушаешь городскую паузу между шагами. В ней щелкает невидимый замок, и старый ключ сам просится в котомку.',
+  },
+  {
+    id: 'witch-circle',
+    craft: 'witch',
+    name: 'Малый круг',
+    glyph: '✦',
+    hint: 'собрать разрозненную магию в один тихий жест',
+    affinity: { witch: 1 },
+    trinket: 'charm-bag',
+    attention: -1,
+    outcome: 'Ты чертишь малый круг и собираешь в него все, что уже умеешь. После круга остается ладанный мешочек, теплый от силы.',
+  },
+];
+
+function unlockedCrafts(state: PathState, identityId: string): string[] {
+  const ids = new Set<string>([identityId, ...state.skills]);
+  for (const [id, points] of Object.entries(state.affinity)) {
+    if (points >= Math.floor(SKILL_THRESHOLD / 2)) ids.add(id);
+  }
+  return [...ids];
+}
+
+export function availablePathSpells(state: PathState, identityId: string): PathSpell[] {
+  const crafts = new Set(unlockedCrafts(state, identityId));
+  return pathSpells.filter((spell) => crafts.has(spell.craft));
+}
+
+function deriveMagicChallenge(state: PathState, identityId: string, seed: number): MagicChallenge | null {
+  const spells = availablePathSpells(state, identityId);
+  if (spells.length === 0) return null;
+  const start = hash(`magic-choice-${seed}-${state.step}`) % spells.length;
+  const choices = [spells[start]];
+  for (let i = 1; i < spells.length && choices.length < 3; i++) {
+    choices.push(spells[(start + i) % spells.length]);
+  }
+  const variants = [
+    {
+      id: 'living-sigil',
+      title: 'Живой знак',
+      text: 'На тропе проступает знак, который не хочет быть просто рисунком. Он ждет, каким ремеслом ты ответишь.',
+      art: 'path-dev-general-1',
+    },
+    {
+      id: 'thin-place',
+      title: 'Тонкое место',
+      text: 'Воздух становится тоньше, и за обычной дорогой видно еще одну. Здесь можно применить не ноги, а магию.',
+      art: 'path-dev-mystic',
+    },
+    {
+      id: 'asking-path',
+      title: 'Тропа спрашивает',
+      text: 'Ветки, камни, огни или волны будто складываются в вопрос. Ответить можно только тем, что уже стало твоим ремеслом.',
+      art: identityId === 'city' ? 'path-dev-city' : 'path-dev-general-2',
+    },
+  ];
+  const base = variants[hash(`magic-variant-${seed}-${state.step}`) % variants.length];
+  return { ...base, choices };
 }
 
 const familiarGiftPools: Record<string, string[]> = {
@@ -684,6 +978,14 @@ function giftLine(familiarName: string, trinketName: string): string {
     `${familiarName} тихо зовёт тебя и показывает, что принёс: ${trinketName}. Вещь ложится к остальным находкам тропы.`,
   ];
   return lines[hash(`gift-line-${familiarName}-${trinketName}`) % lines.length];
+}
+
+function familiarGiftArt(trinketId: string, identityId: string): string {
+  if (trinketId === 'shell' || trinketId === 'holed-stone' || trinketId === 'sig-sea') return 'familiar-gift-sea';
+  if (trinketId === 'old-key' || trinketId === 'sig-city' || identityId === 'city') return 'familiar-gift-city';
+  if (trinketId === 'leaf' || trinketId === 'twig' || trinketId === 'acorn' || trinketId === 'pinecone' || trinketId === 'amber' || trinketId === 'sig-green') return 'familiar-gift-forest';
+  if (trinketId === 'charm-bag') return 'artifact-charm-bag';
+  return hash(`familiar-gift-art-${trinketId}-${identityId}`) % 2 === 0 ? 'familiar-gift-home' : 'familiar-gift-window';
 }
 
 export function deriveFamiliarGift(state: PathState, identityId: string, today: string): FamiliarGift | null {
@@ -718,13 +1020,53 @@ export function deriveFamiliarGift(state: PathState, identityId: string, today: 
     trinketId,
     title: 'Находка фамильяра',
     text: giftLine(familiarName, trinket.name),
+    art: familiarGiftArt(trinketId, famType),
   };
+}
+
+function familiarCareArt(familiarId: string, flavor: string, seed: number, today: string): string {
+  if (familiarId === 'bear' && flavor === 'green') return 'familiar-care-bear-green';
+  if (familiarId === 'fox' && flavor === 'hearth') return 'familiar-care-fox-hearth';
+  if (familiarId === 'wolf' && flavor === 'city') return 'familiar-care-wolf-city';
+  const pool = ['familiar-care-window', 'familiar-care-rest', 'familiar-care-satchel', 'familiar-care-moonlight'];
+  return pool[hash(`familiar-care-art-${seed}-${today}-${familiarId}-${flavor}`) % pool.length];
+}
+
+export function deriveFamiliarCare(state: PathState, identityId: string, today: string): FamiliarCare | null {
+  if (state.lastFamiliarCareDate === today) return null;
+  const companions = activeFamiliars(state).filter((f) => f.bond > 0);
+  if (companions.length === 0) return null;
+  const seed = userSeed();
+  const companion = companions[hash(`home-familiar-care-who-${seed}-${today}-${state.step}`) % companions.length];
+  const familiar = familiars.find((f) => f.id === companion.id);
+  if (!familiar) return null;
+  const name = companion.name || familiar.name;
+  const flavor = familiarAffinity[companion.id] ?? identityId;
+  const title = 'Фамильяр рядом';
+  const textPool = [
+    `${name} устраивается неподалёку и будто ждёт, что ты заметишь его без всякой причины.`,
+    `${name} тихо появляется рядом. Сегодня ему не нужно ничего особенного, только немного твоего времени.`,
+    `${name} смотрит на тебя так, будто день станет ровнее, если вы на минуту побудете рядом.`,
+  ];
+  const text = textPool[hash(`home-familiar-care-text-${seed}-${today}-${companion.id}`) % textPool.length];
+  const art = familiarCareArt(companion.id, flavor, seed, today);
+  const actions = [
+    { text: 'Побыть рядом', outcome: `${name} остаётся рядом ещё немного. Ничего не меняется, кроме ощущения, что дом стал живее.`, art },
+    { text: 'Покормить и налить воды', outcome: `${name} принимает заботу как должное чудо и устраивается спокойнее.`, art: 'familiar-bowl' },
+    {
+      text: 'Погладить',
+      outcome: `${name} принимает маленький жест и довольно устраивается поближе.`,
+      art: 'familiar-stroking',
+    },
+  ];
+  return { familiarId: companion.id, title, text, art, actions };
 }
 
 export type PathStep =
   | { kind: 'rest' }
   | { kind: 'quiet'; text: string }
   | { kind: 'attention'; level: number }
+  | { kind: 'magic'; challenge: MagicChallenge }
   | { kind: 'event'; event: PathEvent }
   | { kind: 'familiar'; familiarId: string }
   | { kind: 'familiarEvent'; interaction: FamiliarInteraction }
@@ -819,9 +1161,15 @@ export function deriveStep(state: PathState, identityId: string, today: string):
     return { kind: 'familiar', familiarId: pickFamiliarId(state, identityId, seed) };
   }
 
+  const magic = deriveMagicChallenge(state, identityId, seed);
+  const magicChance = state.skills.length > 0 ? 24 : Math.min(14, 6 + Math.floor((state.affinity[identityId] ?? 0) / 3));
+  if (magic && roll < famStart + famChance + magicChance) {
+    return { kind: 'magic', challenge: magic };
+  }
+
   const eligible = eligibleEvents(state, identityId);
   const altar = altarEffect(state, identityId);
-  const eventChance = Math.min(88, famStart + famChance + 56 + rareEventBoost(state, identityId) * 5 + forestAttentionLevel(state) * 3 + altar.eventBoost + potionEventBoost(state));
+  const eventChance = Math.min(88, famStart + famChance + magicChance + 56 + rareEventBoost(state, identityId) * 5 + forestAttentionLevel(state) * 3 + altar.eventBoost + potionEventBoost(state));
   if (roll < eventChance && eligible.length > 0) {
     const rare = eligible.filter(grantsAmulet);
     const boost = rareEventBoost(state, identityId) + altar.rareBoost + potionRareBoost(state);
@@ -835,36 +1183,42 @@ export function deriveStep(state: PathState, identityId: string, today: string):
   return { kind: 'quiet', text: lines[qi] };
 }
 
-function bumpStep(state: PathState, today: string): PathState {
-  const used = state.lastStepDate === today ? state.stepsToday : 0;
+function bumpStep(state: PathState, today: string, identityId?: string): PathState {
+  const pace = pathStepPace(state, today);
   const onBonus = (state.bonusSteps ?? 0) > 0;
   // Подарочные шаги идут из bonusSteps и не считаются в дневной лимит.
   const rest = state.forcedSteps?.slice(1);
-  return {
+  const currentWindow = stepWindowKey(today);
+  const next = {
     ...state,
     step: state.step + 1,
-    stepsToday: onBonus ? used : used + 1,
+    stepsToday: onBonus ? pace.usedToday : pace.usedToday + 1,
     bonusSteps: onBonus ? state.bonusSteps! - 1 : state.bonusSteps,
     lastStepDate: today,
+    lastStepAt: new Date().toISOString(),
+    stepWindowKey: onBonus ? state.stepWindowKey : currentWindow,
+    stepWindowSteps: onBonus ? state.stepWindowSteps : pace.windowUsed + 1,
     forcedSteps: rest && rest.length > 0 ? rest : undefined,
     potionEffects: activePotionEffects(state),
   };
+  return onBonus ? next : advancePathDevelopment(next, identityId, today);
 }
 
 function pushLog(state: PathState, entry: PathLogEntry): PathLogEntry[] {
   return [entry, ...state.log].slice(0, 120);
 }
 
-export function commitQuiet(state: PathState, today: string): PathState {
-  return shiftForestAttention(bumpStep(state, today), -1);
+export function commitQuiet(state: PathState, today: string, identityId?: string): PathState {
+  return shiftForestAttention(bumpStep(state, today, identityId), -1);
 }
 
 export function commitForestAttention(
   state: PathState,
   choice: ForestAttentionChoice,
   today: string,
+  identityId?: string,
 ): { state: PathState; outcome: string; note?: string } {
-  const s = bumpStep(state, today);
+  const s = bumpStep(state, today, identityId);
   if (choice === 'hide') {
     const next = shiftForestAttention(s, -3);
     const outcome = 'Ты останавливаешься, гасишь лишние движения и даёшь тропе забыть твой шум. Дорога расходится мягче.';
@@ -878,8 +1232,8 @@ export function commitForestAttention(
   return { state: { ...next, log }, outcome, note: 'Получен один бонусный шаг, но путь стал внимательнее.' };
 }
 
-export function commitFamiliar(state: PathState, familiarId: string, adopt: boolean, today: string): PathState {
-  const s = shiftForestAttention(bumpStep(state, today), softenAttentionDelta(state, adopt ? -1 : 1));
+export function commitFamiliar(state: PathState, familiarId: string, adopt: boolean, today: string, identityId?: string): PathState {
+  const s = shiftForestAttention(bumpStep(state, today, identityId), softenAttentionDelta(state, adopt ? -1 : 1));
   if (!adopt) return s;
   const companions = activeFamiliars(s);
   const existing = companions.find((f) => f.id === familiarId);
@@ -896,8 +1250,8 @@ export function commitFamiliar(state: PathState, familiarId: string, adopt: bool
   return syncLegacy({ ...s, famCooldownUntil: s.step + 4 }, next);
 }
 
-export function commitDragon(state: PathState, dragonId: string, adopt: boolean, today: string): PathState {
-  const s = shiftForestAttention(bumpStep(state, today), softenAttentionDelta(state, adopt ? -1 : 1));
+export function commitDragon(state: PathState, dragonId: string, adopt: boolean, today: string, identityId?: string): PathState {
+  const s = shiftForestAttention(bumpStep(state, today, identityId), softenAttentionDelta(state, adopt ? -1 : 1));
   if (!adopt) return s;
   const have = befriendedDragons(s);
   const dragonFriends = have.includes(dragonId) ? have : [...have, dragonId];
@@ -922,7 +1276,7 @@ export function commitFamiliarInteraction(
   const before = activeFamiliars(state);
   const beforeCompanion = before.find((f) => f.id === interaction.familiarId);
   const attentionDelta = choice.bond > 0 ? -1 : choice.bond < 0 ? 1 : 0;
-  const s = shiftForestAttention(bumpStep(state, today), softenAttentionDelta(state, attentionDelta + encounterAttentionDelta(identityId, choice.affinity ?? {}, [])));
+  const s = shiftForestAttention(bumpStep(state, today, identityId), softenAttentionDelta(state, attentionDelta + encounterAttentionDelta(identityId, choice.affinity ?? {}, [])));
   const updated = before
     .map((f) => f.id === interaction.familiarId ? { ...f, bond: clampBond(f.bond + choice.bond) } : f)
     .filter((f) => f.bond > FAMILIAR_BOND_MIN);
@@ -982,6 +1336,17 @@ export function commitFamiliarGift(
   return { state: { ...base, log }, added, outcome };
 }
 
+export function commitFamiliarCare(
+  state: PathState,
+  care: FamiliarCare,
+  action: FamiliarCare['actions'][number],
+  today: string,
+): { state: PathState; outcome: string } {
+  const base = { ...state, lastFamiliarCareDate: today };
+  const log = pushLog(base, { date: today, eventId: 'familiar-care-' + care.familiarId, choice: action.text, outcome: action.outcome });
+  return { state: { ...base, log }, outcome: action.outcome };
+}
+
 export function commitEncounter(
   state: PathState,
   event: PathEvent,
@@ -990,7 +1355,7 @@ export function commitEncounter(
   today: string,
 ): { state: PathState; learned: string[] } {
   const s = shiftForestAttention(
-    bumpStep(state, today),
+    bumpStep(state, today, identityId),
     softenAttentionDelta(state, encounterAttentionDelta(identityId, res.affinity, res.trinkets) + (res.attention ?? 0)),
   );
 
@@ -1023,13 +1388,61 @@ export function commitEncounter(
   return { state: { ...s, affinity, trinkets, seen, skills, log }, learned };
 }
 
+export function commitMagicChallenge(
+  state: PathState,
+  challenge: MagicChallenge,
+  spell: PathSpell,
+  identityId: string,
+  today: string,
+): { state: PathState; learned: string[]; found?: string; note?: string } {
+  const trinkets = spell.trinket ? [spell.trinket] : [];
+  const s = shiftForestAttention(
+    bumpStep(state, today, identityId),
+    softenAttentionDelta(state, encounterAttentionDelta(identityId, spell.affinity ?? {}, trinkets) + (spell.attention ?? 0)),
+  );
+
+  const affinity = { ...s.affinity };
+  const boostedAffinity = familiarAffinityBonus(s, identityId, spell.affinity ?? {});
+  for (const [k, v] of Object.entries(boostedAffinity)) affinity[k] = (affinity[k] || 0) + v;
+
+  const nextTrinkets = [...s.trinkets];
+  for (const t of trinkets) if (!nextTrinkets.includes(t)) nextTrinkets.push(t);
+
+  const skills = [...s.skills];
+  const learned: string[] = [];
+  for (const [id, v] of Object.entries(affinity)) {
+    if (id !== identityId && v >= SKILL_THRESHOLD && !skills.includes(id)) {
+      skills.push(id);
+      learned.push(id);
+    }
+  }
+
+  const bonusSteps = spell.bonusSteps ? (s.bonusSteps ?? 0) + spell.bonusSteps : s.bonusSteps;
+  const note = spell.bonusSteps
+    ? `Заклинание дало бонусных шагов: ${spell.bonusSteps}.`
+    : spell.attention && spell.attention < 0
+      ? 'Заклинание сделало внимание пути тише.'
+      : spell.attention && spell.attention > 0
+        ? 'Заклинание прозвучало громко, и путь это заметил.'
+        : undefined;
+  const log = pushLog(s, { date: today, eventId: 'magic-' + challenge.id, choice: spell.name, outcome: spell.outcome });
+
+  return {
+    state: { ...s, affinity, trinkets: nextTrinkets, skills, bonusSteps, log },
+    learned,
+    found: spell.trinket,
+    note,
+  };
+}
+
 export function commitCrossroad(
   state: PathState,
   targetId: string,
   accept: boolean,
   today: string,
+  identityId?: string,
 ): PathState {
-  const s = shiftForestAttention(bumpStep(state, today), softenAttentionDelta(state, accept ? 1 : -1));
+  const s = shiftForestAttention(bumpStep(state, today, identityId), softenAttentionDelta(state, accept ? 1 : -1));
   const seen = [...s.seen, 'crossroad-' + targetId];
   const label = identityFor(targetId).label;
 

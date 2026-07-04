@@ -157,10 +157,21 @@ export interface PathPotionEffect {
   calm?: number;
 }
 
+export interface PathDevelopmentState {
+  general: number;
+  byIdentity: Record<string, number>;
+  lastDate?: string;
+  generalToday?: number;
+  identityToday?: Record<string, number>;
+}
+
 export interface PathState {
   step: number;                       // сколько шагов пройдено всего
   lastStepDate?: string;              // yyyy-mm-dd последнего шага
   stepsToday: number;                 // шагов сделано сегодня (лимит — STEPS_PER_DAY)
+  lastStepAt?: string;                // ISO-время последнего шага
+  stepWindowKey?: string;             // 12-часовое окно, в котором считались обычные шаги
+  stepWindowSteps?: number;           // обычных шагов в текущем 12-часовом окне
   affinity: Record<string, number>;   // склонности по типажам (id → очки)
   familiar?: string;                  // legacy: первый фамильяр (id вида 'cat')
   familiarName?: string;              // legacy: имя первого фамильяра
@@ -177,11 +188,13 @@ export interface PathState {
   famCooldownUntil?: number;          // до какого step фамильяры не встречаются (после принятия — 4 шага)
   lastFamiliarNudgeDate?: string;     // yyyy-mm-dd последнего вне-шагового взаимодействия
   lastFamiliarGiftDate?: string;      // yyyy-mm-dd последней принесённой фамильяром находки
+  lastFamiliarCareDate?: string;      // yyyy-mm-dd последнего простого ежедневного взаимодействия
   forestAttention?: number;           // 0..6: насколько тропа присматривается к шагам
   altar?: PathAltarState;             // выбранный алтарь и предметы, лежащие на нём
   knownPotionRecipes?: string[];       // открытые экспериментами рецепты зелий
   potionEffects?: PathPotionEffect[];  // временные эффекты зелий на тропе
   lastPotionBrewDate?: string;         // yyyy-mm-dd последней успешной варки
+  development?: PathDevelopmentState;  // развитие общей тропы и конкретных ведьминых путей
 }
 
 /** Гарантированный шаг из очереди подарка: фамильяр-«извинение» / медведь / шанс дракона. */

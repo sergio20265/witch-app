@@ -7,10 +7,14 @@ import { moonInfo, upcomingMoon } from '../lib/moon';
 import { seasonNames, nextSabbat, formatSabbatDate } from '../data/wheelOfYear';
 import { cardForDate } from '../data/cards';
 import { runeForDate } from '../data/runes';
-import { cardArtById, runeArtById } from '../assets';
+import { cardArtById, pathArtFor, runeArtById } from '../assets';
 import { readStore, useLocalStorage } from '../storage/useLocalStorage';
 import { identityFor, blendedPathWhisper } from '../data/identities';
-import { commitFamiliarGift, commitFamiliarNudge, defaultPathState, deriveFamiliarGift, deriveFamiliarNudge, stepsLeftToday, type FamiliarInteractionChoice } from '../lib/path';
+import {
+  commitFamiliarCare, commitFamiliarGift, commitFamiliarNudge,
+  defaultPathState, deriveFamiliarCare, deriveFamiliarGift, deriveFamiliarNudge,
+  stepsLeftToday, type FamiliarCare, type FamiliarInteractionChoice,
+} from '../lib/path';
 import { familiarById, trinketById } from '../data/path';
 import type { PathState } from '../storage/types';
 import { PATH_ENABLED } from '../config';
@@ -70,13 +74,17 @@ export function Home() {
   const runeRevealed = readStore<{ date: string }[]>('runeHistory', []).some((h) => h.date === today);
   const familiarNudge = PATH_ENABLED ? deriveFamiliarNudge(path, identity.id, today) : null;
   const familiarGift = PATH_ENABLED && !familiarNudge ? deriveFamiliarGift(path, identity.id, today) : null;
+  const familiarCare = PATH_ENABLED && !familiarNudge && !familiarGift ? deriveFamiliarCare(path, identity.id, today) : null;
   const nudgeFamiliar = familiarById(familiarNudge?.familiarId);
   const giftFamiliar = familiarById(familiarGift?.familiarId);
   const giftTrinket = familiarGift ? trinketById(familiarGift.trinketId) : undefined;
+  const careFamiliar = familiarById(familiarCare?.familiarId);
   const [familiarSheet, setFamiliarSheet] = useState(false);
   const [familiarOutcome, setFamiliarOutcome] = useState('');
   const [giftSheet, setGiftSheet] = useState(false);
   const [giftOutcome, setGiftOutcome] = useState('');
+  const [careSheet, setCareSheet] = useState(false);
+  const [careOutcome, setCareOutcome] = useState<{ text: string; art?: string } | null>(null);
 
   // Настраиваемые тропинки: пользователь выбирает страницы и их порядок.
   const [homeLinks, setHomeLinks] = useLocalStorage<string[]>('homeLinks', DEFAULT_HOME_LINKS);
@@ -117,6 +125,13 @@ export function Home() {
     const res = commitFamiliarGift(path, familiarGift, today);
     setPath(res.state);
     setGiftOutcome(res.outcome);
+  }
+
+  function answerFamiliarCare(action: FamiliarCare['actions'][number]) {
+    if (!familiarCare) return;
+    const res = commitFamiliarCare(path, familiarCare, action, today);
+    setPath(res.state);
+    setCareOutcome({ text: res.outcome, art: action.art });
   }
 
   return (
@@ -269,6 +284,18 @@ export function Home() {
           </button>
         )}
 
+        {PATH_ENABLED && familiarCare && careFamiliar && (
+          <button className="familiar-nudge familiar-nudge--care rise" onClick={() => { setCareOutcome(null); setCareSheet(true); }}>
+            <span className="familiar-nudge__glyph">{careFamiliar.glyph}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="eyebrow">Фамильяр рядом</div>
+              <div className="familiar-nudge__title">Побыть вместе</div>
+              <div className="familiar-nudge__hint">{careFamiliar.name} ждёт маленького жеста</div>
+            </div>
+            <span className="faint" style={{ fontSize: '1.2rem' }}>→</span>
+          </button>
+        )}
+
         {PATH_ENABLED && (
           <Link to="/profile" className="profile-link rise">
             <span className="profile-link__avatar">
@@ -358,6 +385,7 @@ export function Home() {
 
       {giftSheet && familiarGift && giftFamiliar && giftTrinket && (
         <Sheet title={familiarGift.title} onClose={() => setGiftSheet(false)}>
+          <img className="sheet-art" src={pathArtFor(familiarGift.art)} alt="" />
           <div className="familiar-home-sheet familiar-home-sheet--gift">
             <span className="familiar-home-sheet__glyph">{giftFamiliar.glyph}</span>
             <div>
@@ -381,6 +409,34 @@ export function Home() {
             </>
           ) : (
             <button className="btn btn--primary btn--block" onClick={acceptFamiliarGift}>Забрать в котомку</button>
+          )}
+        </Sheet>
+      )}
+
+      {careSheet && familiarCare && careFamiliar && (
+        <Sheet title={familiarCare.title} onClose={() => setCareSheet(false)}>
+          <img className="sheet-art" src={pathArtFor(careOutcome?.art ?? familiarCare.art)} alt="" />
+          <div className="familiar-home-sheet familiar-home-sheet--care">
+            <span className="familiar-home-sheet__glyph">{careFamiliar.glyph}</span>
+            <div>
+              <div className="eyebrow">{careFamiliar.name}</div>
+              <p>{familiarCare.text}</p>
+            </div>
+          </div>
+
+          {careOutcome ? (
+            <>
+              <p className="path-result">{careOutcome.text}</p>
+              <button className="btn btn--primary btn--block" onClick={() => setCareSheet(false)}>Готово</button>
+            </>
+          ) : (
+            <div className="stack stack--tight">
+              {familiarCare.actions.map((action) => (
+                <button key={action.text} className="choice" onClick={() => answerFamiliarCare(action)}>
+                  {action.text}
+                </button>
+              ))}
+            </div>
           )}
         </Sheet>
       )}

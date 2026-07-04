@@ -5,9 +5,9 @@ import { PageHeader } from '../components/PageHeader';
 import { useLocalStorage, readStore, writeStore } from '../storage/useLocalStorage';
 import type { PathState } from '../storage/types';
 import {
-  defaultPathState, deriveStep, stepsLeftToday,
+  defaultPathState, deriveStep, stepsLeftToday, pathStepPace, pathDevelopmentSummary,
   activeFamiliars, commitQuiet, commitFamiliar, commitEncounter, commitCrossroad, commitDragon, commitFamiliarInteraction, commitForestAttention,
-  forestAttentionHint, forestAttentionLabel, forestAttentionLevel,
+  forestAttentionHint, forestAttentionLabel, forestAttentionLevel, commitMagicChallenge, availablePathSpells,
 } from '../lib/path';
 import { crossroadFlavor, type PathBranch, type PathEvent, type PathNode } from '../data/pathEvents';
 import { identityFor } from '../data/identities';
@@ -27,11 +27,12 @@ export function MyPath() {
   const [state, setState] = useLocalStorage<PathState>('pathState', defaultPathState());
   const identity = identityFor(readStore<string>('userIdentity', ''));
   const today = todayISO();
-  const left = stepsLeftToday(state, today);
+  const pace = pathStepPace(state, today);
   const step = deriveStep(state, identity.id, today);
   const attentionLevel = forestAttentionLevel(state);
   const attentionLabel = forestAttentionLabel(state);
   const attentionHint = forestAttentionHint(state);
+  const development = pathDevelopmentSummary(state, identity.id, today);
 
   // Прохождение события: текущий узел + накопленные эффекты ветки.
   const [node, setNode] = useState<string | null>(null);
@@ -61,6 +62,8 @@ export function MyPath() {
       text = step.text;
     } else if (step.kind === 'attention') {
       name = 'Внимание пути'; text = 'Путь смотрит слишком пристально. Можно затаиться или пройти напролом.';
+    } else if (step.kind === 'magic') {
+      name = step.challenge.title; text = step.challenge.text;
     } else if (step.kind === 'familiar') {
       const fam = familiarById(step.familiarId);
       name = fam?.name ?? name; text = fam?.blurb ?? '';
@@ -75,7 +78,7 @@ export function MyPath() {
     }
     setSharing(true);
     try {
-      await shareCard({ name, text, artUrl: stepArtUrl(step, identity.id), dialogTitle: 'Поделиться тропинкой' });
+      await shareCard({ name, text, artUrl: stepArtUrl(step, identity.id, state), dialogTitle: 'Поделиться тропинкой' });
     } catch { /* закрыли шторку */ } finally {
       setSharing(false);
     }
@@ -103,7 +106,7 @@ export function MyPath() {
 
   function chooseFamiliar(familiarId: string, adopt: boolean) {
     const before = activeFamiliars(state);
-    setState(commitFamiliar(state, familiarId, adopt, today));
+    setState(commitFamiliar(state, familiarId, adopt, today, identity.id));
     const fam = familiarById(familiarId);
     const canAdd = before.length > 0 && before.length < 2 && before.some((f) => f.bond >= 10);
     setResult({
@@ -134,13 +137,13 @@ export function MyPath() {
   }
 
   function chooseDragon(dragonId: string, adopt: boolean) {
-    setState(commitDragon(state, dragonId, adopt, today));
+    setState(commitDragon(state, dragonId, adopt, today, identity.id));
     const d = dragonById(dragonId);
     setResult({ outcome: adopt ? (d?.befriend ?? '') : (d?.decline ?? ''), learned: [] });
   }
 
   function chooseCrossroad(targetId: string, accept: boolean) {
-    setState(commitCrossroad(state, targetId, accept, today));
+    setState(commitCrossroad(state, targetId, accept, today, identity.id));
     if (accept) writeStore('userIdentity', targetId);
     setResult({
       outcome: accept
@@ -151,13 +154,21 @@ export function MyPath() {
   }
 
   function chooseForestAttention(choice: 'hide' | 'press') {
-    const res = commitForestAttention(state, choice, today);
+    const res = commitForestAttention(state, choice, today, identity.id);
     setState(res.state);
     setResult({ outcome: res.outcome, learned: [], note: res.note });
   }
 
+  function chooseMagic(index: number) {
+    if (step.kind !== 'magic') return;
+    const spell = step.challenge.choices[index];
+    const res = commitMagicChallenge(state, step.challenge, spell, identity.id, today);
+    setState(res.state);
+    setResult({ outcome: spell.outcome, learned: res.learned, found: res.found, note: res.note });
+  }
+
   // ----- Рендер -----
-  const usedToday = state.lastStepDate === today ? state.stepsToday : 0;
+  const usedToday = pace.usedToday;
 
   return (
     <>
@@ -189,11 +200,38 @@ export function MyPath() {
           </details>
         </div>
 
+        <div className="path-development rise" aria-label="Развитие тропы">
+          <div>
+            <span>Общая тропа</span>
+            <strong>{development.general}</strong>
+            <em>сегодня {development.generalToday}/{development.generalDailyLimit}</em>
+          </div>
+          <div>
+            <span>{identity.label}</span>
+            <strong>{development.specific}</strong>
+            <em>сегодня {development.specificToday}/{development.specificDailyLimit}</em>
+          </div>
+        </div>
+
+        {availablePathSpells(state, identity.id).length > 0 && (
+          <div className="path-magic-strip rise" aria-label="Доступная магия на тропе">
+            {availablePathSpells(state, identity.id).slice(0, 5).map((spell) => (
+              <span key={spell.id} title={spell.hint}>
+                <b>{spell.glyph}</b>
+                {spell.name}
+              </span>
+            ))}
+          </div>
+        )}
+
         {result ? (
           <div className="path-card rise">
             <p className="path-outcome">{result.outcome}</p>
             {result.found && trinketById(result.found) && (
-              <div className="path-found">{trinketById(result.found)!.glyph} Находка: {trinketById(result.found)!.name}</div>
+              <>
+                <img className="path-found-art" src={pathArtFor(trinketArt(result.found))} alt="" />
+                <div className="path-found">{trinketById(result.found)!.glyph} Находка: {trinketById(result.found)!.name}</div>
+              </>
             )}
             {result.note && <div className="path-learned">{result.note}</div>}
             {result.learned.map((id) => (
@@ -207,13 +245,15 @@ export function MyPath() {
           <div className="path-card rise center">
             <div className="path-rest-glyph">🌙</div>
             <h2 style={{ margin: '6px 0' }}>Тропа отдыхает</h2>
-            <p className="muted">Ты прошла свои шаги на сегодня. Тропинка позовёт снова завтра.</p>
+            <p className="muted">
+              В этом отрезке пути шаги закончились. Следующие обычные шаги откроются {pace.nextWindowLabel}.
+            </p>
             <Link to="/profile" className="btn btn--ghost btn--block" style={{ marginTop: 16 }}>Открыть профиль</Link>
           </div>
         ) : (
           <>
             <div className="path-scene-wrap rise">
-              <div className="path-scene-art" style={{ backgroundImage: `url(${stepArtUrl(step, identity.id)})` }} aria-hidden />
+              <div className="path-scene-art" style={{ backgroundImage: `url(${stepArtUrl(step, identity.id, state)})` }} aria-hidden />
               <button className="path-share-btn" onClick={shareScene} disabled={sharing} aria-label="Поделиться сценой">
                 {sharing ? '…' : '↑'}
               </button>
@@ -222,7 +262,7 @@ export function MyPath() {
             {step.kind === 'quiet' && (
               <div className="path-card rise">
                 <p className="path-scene-text">{step.text}</p>
-                <button className="btn btn--primary btn--block" onClick={() => { setState(commitQuiet(state, today)); }}>
+                <button className="btn btn--primary btn--block" onClick={() => { setState(commitQuiet(state, today, identity.id)); }}>
                   Идти дальше
                 </button>
               </div>
@@ -242,6 +282,24 @@ export function MyPath() {
                   <button className="path-choice" onClick={() => chooseForestAttention('press')}>
                     Идти напролом
                   </button>
+                </div>
+              </div>
+            )}
+
+            {step.kind === 'magic' && (
+              <div className="path-card rise">
+                <div className="eyebrow">{step.challenge.title}</div>
+                <p className="path-scene-text">{step.challenge.text}</p>
+                <div className="path-magic-list">
+                  {step.challenge.choices.map((spell, i) => (
+                    <button key={spell.id} className="path-choice path-choice--spell" onClick={() => chooseMagic(i)}>
+                      <span className="path-spell-glyph">{spell.glyph}</span>
+                      <span>
+                        <strong>{spell.name}</strong>
+                        <em>{spell.hint}</em>
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -361,7 +419,8 @@ export function MyPath() {
         )}
 
         <p className="faint center" style={{ fontSize: '0.74rem', marginTop: 16 }}>
-          Шагов сегодня: {usedToday} / {usedToday + left}
+          Шагов сегодня: {usedToday} / {pace.dailyLimit} · сейчас {pace.windowUsed} / {pace.windowLimit}
+          {pace.bonus > 0 ? ` · бонусных: ${pace.bonus}` : ''}
         </p>
         <div className="spacer" />
       </div>
@@ -380,7 +439,28 @@ function pickFrom(pool: string[], key: string): string {
   return pool[h % pool.length];
 }
 
-function stepArtUrl(step: { kind: string; event?: PathEvent; familiarId?: string; interaction?: { familiarId: string }; dragonId?: string }, identityId: string): string {
+function developmentArt(state: PathState, identityId: string): string | null {
+  const dev = state.development;
+  const nextSpecific = (dev?.byIdentity[identityId] ?? 0) + 1;
+  const nextGeneral = (dev?.general ?? 0) + 1;
+  if (nextSpecific > 0 && nextSpecific % 2 === 0) return `path-dev-${identityId}`;
+  if (nextGeneral > 0 && nextGeneral % 4 === 0) return `path-dev-general-${((Math.floor(nextGeneral / 4) - 1) % 6) + 1}`;
+  return null;
+}
+
+function trinketArt(id: string): string {
+  if (id === 'shell' || id === 'sig-sea') return 'ingredient-shell';
+  if (id === 'amber') return 'ingredient-amber';
+  if (id === 'old-key' || id === 'sig-city') return 'artifact-city-key';
+  if (id === 'charm-bag') return 'artifact-charm-bag';
+  if (id === 'sig-green') return 'ingredient-oak-heart';
+  if (id === 'sig-hearth') return 'ingredient-hearth-ember';
+  if (id === 'sig-lunar') return 'ingredient-moon-water';
+  if (id === 'holed-stone') return 'artifact-sea-glass';
+  return 'event-rare-find';
+}
+
+function stepArtUrl(step: { kind: string; event?: PathEvent; familiarId?: string; interaction?: { familiarId: string }; dragonId?: string; challenge?: { art: string } }, identityId: string, state: PathState): string {
   if (step.kind === 'event' && step.event) {
     if (identityId === 'city' && step.event.tracks?.includes('city') && !step.event.art.startsWith('path-city-')) {
       return pathArtFor(pickFrom(cityPathArt, step.event.id));
@@ -390,8 +470,11 @@ function stepArtUrl(step: { kind: string; event?: PathEvent; familiarId?: string
   if (step.kind === 'familiar' && step.familiarId) return familiarArtById[step.familiarId] ?? pathArtFor('path-familiar');
   if (step.kind === 'familiarEvent' && step.interaction) return familiarArtById[step.interaction.familiarId] ?? pathArtFor('path-familiar');
   if (step.kind === 'dragon') return pathArtFor(dragonById(step.dragonId)?.art ?? 'path-dragon');
-  if (step.kind === 'crossroad') return pathArtFor('path-crossroad');
-  if (step.kind === 'attention') return pathArtFor('path-storm-10');
+  if (step.kind === 'crossroad') return pathArtFor('event-crossroads');
+  if (step.kind === 'attention') return pathArtFor('event-path-attention');
+  if (step.kind === 'magic' && step.challenge) return pathArtFor(step.challenge.art);
+  const devArt = step.kind === 'quiet' ? developmentArt(state, identityId) : null;
+  if (devArt) return pathArtFor(devArt);
   if (identityId === 'city') return pathArtFor(pickFrom(cityPathArt, 'quiet-city'));
   return pathArtFor('path-quiet');
 }
