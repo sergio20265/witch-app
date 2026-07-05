@@ -3,7 +3,7 @@
   "private": true,
   "version": "2.18.0",
   "type": "module",
-  "description": "Лесной гримуар — атмосферный личный дневник лесной ведьмы",
+  "description": "Atmospheric mobile journal app for notes, rituals, daily cards, wishes, recipes, memories, and self-reflection.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -33,5 +33,16 @@
     "sharp": "^0.35.1",
     "typescript": "^5.5.4",
     "vite": "^5.4.6"
-  }
+  },
+  "keywords": [
+    "android",
+    "capacitor",
+    "react",
+    "typescript",
+    "vite",
+    "journal",
+    "notes",
+    "mobile-app",
+    "local-first"
+  ]
 }
