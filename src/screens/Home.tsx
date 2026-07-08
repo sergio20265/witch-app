@@ -89,6 +89,7 @@ export function Home() {
   // Настраиваемые тропинки: пользователь выбирает страницы и их порядок.
   const [homeLinks, setHomeLinks] = useLocalStorage<string[]>('homeLinks', DEFAULT_HOME_LINKS);
   const [editingLinks, setEditingLinks] = useState(false);
+  const [draggingHomeLink, setDraggingHomeLink] = useState<string | null>(null);
 
   const seen = new Set<string>();
   const links = homeLinks
@@ -102,6 +103,16 @@ export function Home() {
     if (j < 0 || j >= homeLinks.length) return;
     const next = [...homeLinks];
     [next[i], next[j]] = [next[j], next[i]];
+    setHomeLinks(next);
+  }
+  function dragLinkOver(target: string) {
+    if (!draggingHomeLink || draggingHomeLink === target) return;
+    const from = homeLinks.indexOf(draggingHomeLink);
+    const to = homeLinks.indexOf(target);
+    if (from < 0 || to < 0) return;
+    const next = [...homeLinks];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
     setHomeLinks(next);
   }
   const removeLink = (to: string) => setHomeLinks(homeLinks.filter((t) => t !== to));
@@ -324,7 +335,26 @@ export function Home() {
               const l = CATALOG_MAP[to];
               if (!l) return null;
               return (
-                <div key={to} className="link-row">
+                <div
+                  key={to}
+                  className={'link-row link-row--drag' + (draggingHomeLink === to ? ' is-dragging' : '')}
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', to);
+                    setDraggingHomeLink(to);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    dragLinkOver(to);
+                  }}
+                  onDragEnd={() => setDraggingHomeLink(null)}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setDraggingHomeLink(null);
+                  }}
+                >
+                  <span className="link-row__drag" aria-hidden="true">☰</span>
                   <span className="link-row__ico">{l.ico}</span>
                   <span className="link-row__label">{l.label}</span>
                   <button className="link-row__btn" onClick={() => moveLink(i, -1)} disabled={i === 0} aria-label="Выше">↑</button>
@@ -440,6 +470,7 @@ export function Home() {
           )}
         </Sheet>
       )}
+
     </>
   );
 }

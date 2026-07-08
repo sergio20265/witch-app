@@ -27,6 +27,7 @@ function potionArt(id: string): string {
   if (id === 'strength') return 'potion-strength';
   if (id === 'luck') return 'potion-luck';
   if (id === 'quiet') return 'potion-quiet';
+  if (id === 'spring-34') return 'potion-spring';
   return 'potion-clarity';
 }
 

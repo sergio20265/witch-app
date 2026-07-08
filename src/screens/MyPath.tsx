@@ -2,17 +2,21 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageBackground } from '../components/PageBackground';
 import { PageHeader } from '../components/PageHeader';
+import { ImageLightbox } from '../components/ImageLightbox';
 import { useLocalStorage, readStore, writeStore } from '../storage/useLocalStorage';
 import type { PathState } from '../storage/types';
 import {
   defaultPathState, deriveStep, stepsLeftToday, pathStepPace, pathDevelopmentSummary,
-  activeFamiliars, commitQuiet, commitFamiliar, commitEncounter, commitCrossroad, commitDragon, commitFamiliarInteraction, commitForestAttention,
+  activeFamiliars, commitQuiet, commitFamiliar, commitEncounter, commitCrossroad, commitDragon, commitDragonInteraction, commitFamiliarInteraction, commitForestAttention,
+  commitKeeper, commitKeeperInteraction,
   forestAttentionHint, forestAttentionLabel, forestAttentionLevel, commitMagicChallenge, availablePathSpells,
+  hasUnlockedCraft, maxFamiliarSlots,
+  type PathStep,
 } from '../lib/path';
 import { crossroadFlavor, type PathBranch, type PathEvent, type PathNode } from '../data/pathEvents';
 import { identityFor } from '../data/identities';
-import { familiarById, trinketById, dragonById } from '../data/path';
-import { pathArtFor, familiarArtById, familiarIconById } from '../assets';
+import { familiarById, trinketById, dragonById, forestKeeper } from '../data/path';
+import { pathArtFor, pathVideoFor, familiarArtById, familiarIconById } from '../assets';
 import { shareCard } from '../lib/shareCard';
 import { todayISO } from '../lib/date';
 
@@ -21,6 +25,10 @@ function nodeText(node: PathNode, id: string): string {
 }
 function branchOutcome(b: PathBranch, id: string): string {
   return b.outcomeByType?.[id] ?? b.outcome ?? '';
+}
+function craftRequirementLabel(craft: string | string[]): string {
+  const ids = Array.isArray(craft) ? craft : [craft];
+  return ids.map((id) => identityFor(id).label).join(' / ');
 }
 
 export function MyPath() {
@@ -39,11 +47,13 @@ export function MyPath() {
   const [accAff, setAccAff] = useState<Record<string, number>>({});
   const [accTr, setAccTr] = useState<string[]>([]);
   const [accAttention, setAccAttention] = useState(0);
+  const [accBonusSteps, setAccBonusSteps] = useState(0);
   // Итоговая карточка после совершённого шага.
   const [result, setResult] = useState<{ outcome: string; learned: string[]; found?: string; note?: string } | null>(null);
+  const [lightbox, setLightbox] = useState<{ src: string; title: string } | null>(null);
 
   function resetEncounter() {
-    setNode(null); setAccAff({}); setAccTr([]); setAccAttention(0);
+    setNode(null); setAccAff({}); setAccTr([]); setAccAttention(0); setAccBonusSteps(0);
   }
   function nextStep() {
     setResult(null);
@@ -70,9 +80,16 @@ export function MyPath() {
     } else if (step.kind === 'familiarEvent') {
       const fam = familiarById(step.interaction.familiarId);
       name = step.interaction.title; text = `${fam?.name ?? 'Спутник'}: ${step.interaction.text}`;
+    } else if (step.kind === 'dragonEvent') {
+      const d = dragonById(step.interaction.dragonId);
+      name = step.interaction.title; text = `${d?.name ?? 'Дракон'}: ${step.interaction.text}`;
     } else if (step.kind === 'dragon') {
       const d = dragonById(step.dragonId);
       name = d?.name ?? 'Дракон'; text = d?.blurb ?? '';
+    } else if (step.kind === 'keeper') {
+      name = forestKeeper.name; text = forestKeeper.blurb;
+    } else if (step.kind === 'keeperEvent') {
+      name = step.interaction.title; text = `${forestKeeper.name}: ${step.interaction.text}`;
     } else if (step.kind === 'crossroad') {
       name = 'Перекрёсток путей'; text = crossroadFlavor[step.targetId] ?? '';
     }
@@ -89,19 +106,20 @@ export function MyPath() {
     for (const [k, v] of Object.entries(b.affinity ?? {})) aff[k] = (aff[k] || 0) + v;
     const tr = b.grant?.trinket ? [...accTr, b.grant.trinket] : accTr;
     const attention = accAttention + (b.attention ?? 0);
+    const bonusSteps = accBonusSteps + (b.bonusSteps ?? 0);
 
     if (b.to) {
-      setAccAff(aff); setAccTr(tr); setAccAttention(attention); setNode(b.to);
+      setAccAff(aff); setAccTr(tr); setAccAttention(attention); setAccBonusSteps(bonusSteps); setNode(b.to);
       return;
     }
     const outcome = branchOutcome(b, identity.id);
     const { state: ns, learned } = commitEncounter(
       state, event,
-      { affinity: aff, trinkets: tr, attention, choiceText: b.text, outcome },
+      { affinity: aff, trinkets: tr, attention, bonusSteps, choiceText: b.text, outcome },
       identity.id, today,
     );
     setState(ns);
-    setResult({ outcome, learned, found: tr[tr.length - 1] });
+    setResult({ outcome, learned, found: tr[tr.length - 1], note: bonusSteps ? `Ремесло открыло бонусных шагов: ${bonusSteps}.` : undefined });
   }
 
   function chooseFamiliar(familiarId: string, adopt: boolean) {
@@ -142,6 +160,27 @@ export function MyPath() {
     setResult({ outcome: adopt ? (d?.befriend ?? '') : (d?.decline ?? ''), learned: [] });
   }
 
+  function chooseDragonInteraction(choiceIndex: number) {
+    if (step.kind !== 'dragonEvent') return;
+    const choice = step.interaction.choices[choiceIndex];
+    const res = commitDragonInteraction(state, step.interaction, choice, identity.id, today);
+    setState(res.state);
+    setResult({ outcome: choice.outcome, learned: res.learned, note: res.note });
+  }
+
+  function chooseKeeper(adopt: boolean) {
+    setState(commitKeeper(state, adopt, today, identity.id));
+    setResult({ outcome: adopt ? forestKeeper.befriend : forestKeeper.decline, learned: [] });
+  }
+
+  function chooseKeeperInteraction(choiceIndex: number) {
+    if (step.kind !== 'keeperEvent') return;
+    const choice = step.interaction.choices[choiceIndex];
+    const res = commitKeeperInteraction(state, step.interaction, choice, identity.id, today);
+    setState(res.state);
+    setResult({ outcome: choice.outcome, learned: res.learned, note: res.note });
+  }
+
   function chooseCrossroad(targetId: string, accept: boolean) {
     setState(commitCrossroad(state, targetId, accept, today, identity.id));
     if (accept) writeStore('userIdentity', targetId);
@@ -169,6 +208,8 @@ export function MyPath() {
 
   // ----- Рендер -----
   const usedToday = pace.usedToday;
+  const currentArt = stepArtUrl(step, identity.id, state);
+  const currentVideo = step.kind === 'event' && step.event.video ? pathVideoFor(step.event.video) : undefined;
 
   return (
     <>
@@ -229,7 +270,9 @@ export function MyPath() {
             <p className="path-outcome">{result.outcome}</p>
             {result.found && trinketById(result.found) && (
               <>
-                <img className="path-found-art" src={pathArtFor(trinketArt(result.found))} alt="" />
+                <button className="image-preview image-preview--block" type="button" onClick={() => setLightbox({ src: pathArtFor(trinketArt(result.found!)), title: trinketById(result.found!)!.name })} aria-label={`Open image: ${trinketById(result.found)!.name}`}>
+                  <img className="path-found-art" src={pathArtFor(trinketArt(result.found))} alt="" />
+                </button>
                 <div className="path-found">{trinketById(result.found)!.glyph} Находка: {trinketById(result.found)!.name}</div>
               </>
             )}
@@ -253,7 +296,13 @@ export function MyPath() {
         ) : (
           <>
             <div className="path-scene-wrap rise">
-              <div className="path-scene-art" style={{ backgroundImage: `url(${stepArtUrl(step, identity.id, state)})` }} aria-hidden />
+              {currentVideo ? (
+                <video className="path-scene-video" poster={currentArt} controls playsInline preload="metadata">
+                  <source src={currentVideo} type="video/mp4" />
+                </video>
+              ) : (
+                <button className="path-scene-art image-preview" style={{ backgroundImage: `url(${currentArt})` }} type="button" onClick={() => setLightbox({ src: currentArt, title: lightboxTitle(step) })} aria-label="Open scene image" />
+              )}
               <button className="path-share-btn" onClick={shareScene} disabled={sharing} aria-label="Поделиться сценой">
                 {sharing ? '…' : '↑'}
               </button>
@@ -310,7 +359,11 @@ export function MyPath() {
                 <div className="path-card rise">
                   <div className="path-familiar">
                     {familiarIconById[fam.id]
-                      ? <img className="path-familiar__icon" src={familiarIconById[fam.id]} alt={fam.name} />
+                      ? (
+                        <button className="image-preview path-familiar__preview" type="button" onClick={() => setLightbox({ src: familiarArtById[fam.id] ?? familiarIconById[fam.id], title: fam.name })} aria-label={`Open image: ${fam.name}`}>
+                          <img className="path-familiar__icon" src={familiarIconById[fam.id]} alt={fam.name} />
+                        </button>
+                      )
                       : <span className="path-familiar__glyph">{fam.glyph}</span>}
                     <div>
                       <h3 style={{ margin: 0 }}>{fam.name}</h3>
@@ -324,9 +377,9 @@ export function MyPath() {
                   </div>
                   {activeFamiliars(state).length > 0 && (
                     <p className="faint center" style={{ fontSize: '0.74rem', marginTop: 8 }}>
-                      {activeFamiliars(state).length < 2 && activeFamiliars(state).some((f) => f.bond >= 10)
-                        ? 'Связь с первым спутником крепка: можно принять второго.'
-                        : 'Если второго места нет, новый спутник сменит одного из нынешних.'}
+                      {activeFamiliars(state).length < maxFamiliarSlots(state)
+                        ? `Открыто мест: ${maxFamiliarSlots(state)}. Можно принять ещё одного спутника.`
+                        : 'Если свободного места нет, новый спутник сменит одного из нынешних.'}
                     </p>
                   )}
                 </div>
@@ -340,7 +393,11 @@ export function MyPath() {
                   <div className="eyebrow">{step.interaction.title}</div>
                   <div className="path-familiar">
                     {familiarIconById[fam.id]
-                      ? <img className="path-familiar__icon" src={familiarIconById[fam.id]} alt={fam.name} />
+                      ? (
+                        <button className="image-preview path-familiar__preview" type="button" onClick={() => setLightbox({ src: familiarArtById[fam.id] ?? familiarIconById[fam.id], title: fam.name })} aria-label={`Open image: ${fam.name}`}>
+                          <img className="path-familiar__icon" src={familiarIconById[fam.id]} alt={fam.name} />
+                        </button>
+                      )
                       : <span className="path-familiar__glyph">{fam.glyph}</span>}
                     <div>
                       <h3 style={{ margin: 0 }}>{fam.name}</h3>
@@ -359,13 +416,43 @@ export function MyPath() {
               );
             })()}
 
+            {step.kind === 'dragonEvent' && (() => {
+              const d = dragonById(step.interaction.dragonId)!;
+              const dragonArt = pathArtFor(d.art);
+              return (
+                <div className="path-card rise">
+                  <div className="eyebrow">{step.interaction.title}</div>
+                  <div className="path-familiar">
+                    <button className="image-preview path-familiar__preview" type="button" onClick={() => setLightbox({ src: dragonArt, title: d.name })} aria-label={`Open image: ${d.name}`}>
+                      <img className="path-familiar__icon path-familiar__icon--cover" src={dragonArt} alt={d.name} />
+                    </button>
+                    <div>
+                      <h3 style={{ margin: 0 }}>{d.name}</h3>
+                      <p className="muted" style={{ margin: '4px 0 0' }}>{d.blurb}</p>
+                    </div>
+                  </div>
+                  <p className="path-scene-text">{step.interaction.text}</p>
+                  <div className="stack stack--tight">
+                    {step.interaction.choices.map((choice, i) => (
+                      <button key={i} className="path-choice" onClick={() => chooseDragonInteraction(i)}>
+                        {choice.text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             {step.kind === 'dragon' && (() => {
               const d = dragonById(step.dragonId)!;
+              const dragonArt = pathArtFor(d.art);
               return (
                 <div className="path-card rise">
                   <div className="eyebrow">Редкая встреча</div>
                   <div className="path-familiar">
-                    <span className="path-familiar__glyph">{d.glyph}</span>
+                    <button className="image-preview path-familiar__preview" type="button" onClick={() => setLightbox({ src: dragonArt, title: d.name })} aria-label={`Open image: ${d.name}`}>
+                      <img className="path-familiar__icon path-familiar__icon--cover" src={dragonArt} alt={d.name} />
+                    </button>
                     <div>
                       <h3 style={{ margin: 0 }}>{d.name}</h3>
                       <p className="muted" style={{ margin: '4px 0 0' }}>{d.blurb}</p>
@@ -375,6 +462,55 @@ export function MyPath() {
                   <div className="fab-bar">
                     <button className="btn btn--primary btn--block" onClick={() => chooseDragon(d.id, true)}>Подружиться</button>
                     <button className="btn btn--ghost" onClick={() => chooseDragon(d.id, false)}>Поклониться и уйти</button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {step.kind === 'keeper' && (() => {
+              const keeperArt = pathArtFor(forestKeeper.art);
+              return (
+                <div className="path-card rise">
+                  <div className="eyebrow">Редкая встреча</div>
+                  <div className="path-familiar">
+                    <button className="image-preview path-familiar__preview" type="button" onClick={() => setLightbox({ src: keeperArt, title: forestKeeper.name })} aria-label={`Open image: ${forestKeeper.name}`}>
+                      <img className="path-familiar__icon path-familiar__icon--cover" src={keeperArt} alt={forestKeeper.name} />
+                    </button>
+                    <div>
+                      <h3 style={{ margin: 0 }}>{forestKeeper.name}</h3>
+                      <p className="muted" style={{ margin: '4px 0 0' }}>{forestKeeper.blurb}</p>
+                    </div>
+                  </div>
+                  <p className="path-scene-text">{forestKeeper.meetText}</p>
+                  <div className="fab-bar">
+                    <button className="btn btn--primary btn--block" onClick={() => chooseKeeper(true)}>Подружиться</button>
+                    <button className="btn btn--ghost" onClick={() => chooseKeeper(false)}>Поклониться и уйти</button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {step.kind === 'keeperEvent' && (() => {
+              const keeperArt = pathArtFor(forestKeeper.art);
+              return (
+                <div className="path-card rise">
+                  <div className="eyebrow">{step.interaction.title}</div>
+                  <div className="path-familiar">
+                    <button className="image-preview path-familiar__preview" type="button" onClick={() => setLightbox({ src: keeperArt, title: forestKeeper.name })} aria-label={`Open image: ${forestKeeper.name}`}>
+                      <img className="path-familiar__icon path-familiar__icon--cover" src={keeperArt} alt={forestKeeper.name} />
+                    </button>
+                    <div>
+                      <h3 style={{ margin: 0 }}>{forestKeeper.name}</h3>
+                      <p className="muted" style={{ margin: '4px 0 0' }}>{forestKeeper.blurb}</p>
+                    </div>
+                  </div>
+                  <p className="path-scene-text">{step.interaction.text}</p>
+                  <div className="stack stack--tight">
+                    {step.interaction.choices.map((choice, i) => (
+                      <button key={i} className="path-choice" onClick={() => chooseKeeperInteraction(i)}>
+                        {choice.text}
+                      </button>
+                    ))}
                   </div>
                 </div>
               );
@@ -406,11 +542,15 @@ export function MyPath() {
                   <div className="eyebrow">{ev.title}</div>
                   <p className="path-scene-text">{nodeText(cur, identity.id)}</p>
                   <div className="stack stack--tight">
-                    {cur.choices.map((b, i) => (
-                      <button key={i} className="path-choice" onClick={() => chooseBranch(ev, b)}>
+                    {cur.choices.map((b, i) => {
+                      const locked = b.requiresCraft ? !hasUnlockedCraft(state, identity.id, b.requiresCraft) : false;
+                      return (
+                      <button key={i} className="path-choice" disabled={locked} onClick={() => chooseBranch(ev, b)}>
                         {b.textByType?.[identity.id] ?? b.text}
+                        {locked && <em>Требуется ремесло: {craftRequirementLabel(b.requiresCraft!)}</em>}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -424,8 +564,25 @@ export function MyPath() {
         </p>
         <div className="spacer" />
       </div>
+      {lightbox && (
+        <ImageLightbox src={lightbox.src} title={lightbox.title} alt={lightbox.title} onClose={() => setLightbox(null)} />
+      )}
     </>
   );
+}
+
+function lightboxTitle(step: PathStep): string {
+  if (step.kind === 'event' && step.event) return step.event.title;
+  if (step.kind === 'familiar' && step.familiarId) return familiarById(step.familiarId)?.name ?? 'Scene';
+  if (step.kind === 'familiarEvent' && step.interaction) return step.interaction.title ?? familiarById(step.interaction.familiarId)?.name ?? 'Scene';
+  if (step.kind === 'dragonEvent' && step.interaction) return step.interaction.title ?? dragonById(step.interaction.dragonId)?.name ?? 'Dragon';
+  if (step.kind === 'dragon') return dragonById(step.dragonId)?.name ?? 'Dragon';
+  if (step.kind === 'keeper') return forestKeeper.name;
+  if (step.kind === 'keeperEvent') return step.interaction?.title ?? forestKeeper.name;
+  if (step.kind === 'crossroad') return 'Crossroad';
+  if (step.kind === 'attention') return 'Path attention';
+  if (step.kind === 'magic' && step.challenge) return step.challenge.title;
+  return 'My path';
 }
 
 const cityPathArt = [
@@ -460,7 +617,7 @@ function trinketArt(id: string): string {
   return 'event-rare-find';
 }
 
-function stepArtUrl(step: { kind: string; event?: PathEvent; familiarId?: string; interaction?: { familiarId: string }; dragonId?: string; challenge?: { art: string } }, identityId: string, state: PathState): string {
+function stepArtUrl(step: PathStep, identityId: string, state: PathState): string {
   if (step.kind === 'event' && step.event) {
     if (identityId === 'city' && step.event.tracks?.includes('city') && !step.event.art.startsWith('path-city-')) {
       return pathArtFor(pickFrom(cityPathArt, step.event.id));
@@ -468,8 +625,10 @@ function stepArtUrl(step: { kind: string; event?: PathEvent; familiarId?: string
     return pathArtFor(step.event.art);
   }
   if (step.kind === 'familiar' && step.familiarId) return familiarArtById[step.familiarId] ?? pathArtFor('path-familiar');
-  if (step.kind === 'familiarEvent' && step.interaction) return familiarArtById[step.interaction.familiarId] ?? pathArtFor('path-familiar');
+  if (step.kind === 'familiarEvent' && step.interaction?.familiarId) return familiarArtById[step.interaction.familiarId] ?? pathArtFor('path-familiar');
+  if (step.kind === 'dragonEvent' && step.interaction) return pathArtFor(dragonById(step.interaction.dragonId)?.art ?? 'path-dragon');
   if (step.kind === 'dragon') return pathArtFor(dragonById(step.dragonId)?.art ?? 'path-dragon');
+  if (step.kind === 'keeper' || step.kind === 'keeperEvent') return pathArtFor(forestKeeper.art);
   if (step.kind === 'crossroad') return pathArtFor('event-crossroads');
   if (step.kind === 'attention') return pathArtFor('event-path-attention');
   if (step.kind === 'magic' && step.challenge) return pathArtFor(step.challenge.art);

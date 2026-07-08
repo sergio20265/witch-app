@@ -175,7 +175,7 @@ export interface PathState {
   affinity: Record<string, number>;   // склонности по типажам (id → очки)
   familiar?: string;                  // legacy: первый фамильяр (id вида 'cat')
   familiarName?: string;              // legacy: имя первого фамильяра
-  familiars?: PathFamiliarState[];    // новые слоты фамильяров, максимум 2
+  familiars?: PathFamiliarState[];    // новые слоты фамильяров, максимум 3
   secondFamiliarUnlocked?: boolean;   // второй слот открыт высокой связью
   skills: string[];                   // перенятые ремёсла (id типажей)
   trinkets: string[];                 // обереги/безделушки в котомке
@@ -183,6 +183,9 @@ export interface PathState {
   log: PathLogEntry[];                // летопись пути
   dragon?: boolean;                   // legacy: подружилась хотя бы с одним драконом
   dragonFriends?: string[];           // id драконов, с которыми подружилась (виден в профиле)
+  dragonNames?: Record<string, string>; // данные пользователем имена драконов
+  forestHeartDragonId?: string;        // какой дракон выбран для Сердца леса
+  keeperFriend?: boolean;             // подружилась с Хранителем леса (лесная ведьма)
   forcedSteps?: ForcedStep[];         // очередь гарантированных шагов (подарок-извинение)
   bonusSteps?: number;                // доп. шаги сверх дневного лимита (не считаются в stepsToday)
   famCooldownUntil?: number;          // до какого step фамильяры не встречаются (после принятия — 4 шага)
@@ -198,7 +201,7 @@ export interface PathState {
 }
 
 /** Гарантированный шаг из очереди подарка: фамильяр-«извинение» / медведь / шанс дракона. */
-export type ForcedStep = 'gift' | 'bear' | 'dragon-chance';
+export type ForcedStep = 'gift' | 'bear' | 'dragon-chance' | 'birthday-flight' | 'keeper';
 
 // ===== Воспоминания =====
 export interface Memory {

@@ -24,6 +24,7 @@ import { RuneOfDay } from './screens/RuneOfDay';
 import { Tarot } from './screens/Tarot';
 import { MyPath } from './screens/MyPath';
 import { MyProfile } from './screens/MyProfile';
+import { ForestHeart } from './screens/ForestHeart';
 import { Altar } from './screens/Altar';
 import { Potions } from './screens/Potions';
 import { Onboarding } from './screens/Onboarding';
@@ -62,9 +63,11 @@ export default function App() {
           <Route path="tarot" element={<Tarot />} />
           <Route path="path" element={<MyPath />} />
           <Route path="profile" element={<MyProfile />} />
+          <Route path="forest-heart" element={<ForestHeart />} />
           <Route path="altar" element={<Altar />} />
           <Route path="potions" element={<Potions />} />
           <Route path="more" element={<More />} />
+          <Route path="all" element={<More />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

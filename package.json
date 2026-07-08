@@ -1,7 +1,7 @@
 {
   "name": "forest-grimoire",
   "private": true,
-  "version": "2.18.0",
+  "version": "2.27.0",
   "type": "module",
   "description": "Atmospheric mobile journal app for notes, rituals, daily cards, wishes, recipes, memories, and self-reflection.",
   "scripts": {

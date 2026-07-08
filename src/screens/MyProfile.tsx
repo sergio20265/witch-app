@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageBackground } from '../components/PageBackground';
 import { PageHeader } from '../components/PageHeader';
+import { ImageLightbox } from '../components/ImageLightbox';
 import { useLocalStorage, readStore } from '../storage/useLocalStorage';
 import { shareCard } from '../lib/shareCard';
 import type { PathState, PathFamiliarState } from '../storage/types';
-import { activeFamiliars, befriendedDragons, defaultPathState, familiarBondLabel, hasSecondFamiliarSlot } from '../lib/path';
+import { activeFamiliars, befriendedDragons, defaultPathState, familiarBondLabel, hasSecondFamiliarSlot, hasThirdFamiliarSlot, maxFamiliarSlots, hasKeeperFriend } from '../lib/path';
 import { identityFor, craftGiftsFor, craftTier, craftTierLabel } from '../data/identities';
-import { familiarById, familiarAffinity, trinketById, trinkets as allTrinkets, dragonById } from '../data/path';
-import { familiarArtById, familiarIconById } from '../assets';
+import { familiarById, familiarAffinity, trinketById, trinkets as allTrinkets, dragonById, dragonOaths, forestKeeper } from '../data/path';
+import { birthdayArt, familiarArtById, familiarIconById, pathArtFor } from '../assets';
 import { formatShortDate } from '../lib/date';
 
 // Куда ведёт перенятое ремесло — подпись «родного» раздела.
@@ -17,6 +18,16 @@ const SECTION_LABEL: Record<string, string> = {
   '/moon': 'Лунный календарь', '/treasures': 'Сокровища', '/card': 'Карта дня',
   '/rune': 'Руна дня', '/aesthetic': 'Эстетика', '/wishes': 'Желания',
   '/tarot': 'Таро', '/wheel': 'Колесо года', '/ingredients': 'Ингредиенты',
+};
+
+const DRAGON_GUARDIANS: Record<string, string> = {
+  mountain: 'Охраняет твою укоренённость: способность слышать лес внутри себя и не терять тропу, даже когда вокруг шумит чужое.',
+  forest: 'Охраняет твою находчивость: умение найти проход там, где стены делают вид, что выхода нет.',
+  storm: 'Охраняет твои фазы: рост, тишину, убыль и новое начало, которое приходит не по приказу, а в свой час.',
+  mist: 'Охраняет твои мягкие тайны: сны, предчувствия и силу, которую не нужно никому доказывать.',
+  twilight: 'Охраняет твои переходы: моменты, когда старое уже отпущено, а новое ещё только ищет имя.',
+  amber: 'Охраняет твое тепло: внутренний огонь, который не спорит с тьмой, а просто продолжает светить.',
+  black: 'Охраняет твою тень и границы: ту часть тебя, которая больше не обязана бояться собственной глубины.',
 };
 
 function familiarInfluenceHint(companions: PathFamiliarState[], identityId: string): string {
@@ -46,10 +57,17 @@ export function MyProfile() {
   const identity = identityFor(readStore<string>('userIdentity', ''));
   const userName = readStore<string>('userName', '');
   const userAvatar = readStore<string>('userAvatar', '');
+  const birthdayTitle = readStore<string>('birthdayGiftTitle', '');
+  const birthdaySparks = readStore<number>('birthdayGiftSparks', 0);
   const companions = activeFamiliars(path);
+  const dragonFriends = befriendedDragons(path);
+  const dragonHallUnlocked = dragonFriends.length >= 3;
+  const familiarSlots = maxFamiliarSlots(path);
+  const keeperFriend = hasKeeperFriend(path);
   const influenceHint = familiarInfluenceHint(companions, identity.id);
   const primaryCompanion = companions[0];
   const primaryFamiliar = familiarById(primaryCompanion?.id);
+  const [lightbox, setLightbox] = useState<{ src: string; title: string } | null>(null);
 
   const owned = path.trinkets.map((id) => trinketById(id)).filter(Boolean) as typeof allTrinkets;
   const amulets = owned.filter((t) => t.kind === 'amulet');
@@ -64,6 +82,27 @@ export function MyProfile() {
     if (next === null) return;
     const familiars = companionsNow.map((f) => f.id === familiarId ? { ...f, name: next.trim() || undefined } : f);
     setPath({ ...path, familiars, familiar: familiars[0]?.id, familiarName: familiars[0]?.name });
+  }
+
+  function dragonDisplayName(dragonId: string, fallback: string): string {
+    return path.dragonNames?.[dragonId]?.trim() || fallback;
+  }
+
+  function renameDragon(dragonId: string) {
+    const dragon = dragonById(dragonId);
+    if (!dragon) return;
+    const current = path.dragonNames?.[dragonId] || '';
+    const next = prompt(`Как зовут дракона? (${dragon.name})`, current);
+    if (next === null) return;
+    const dragonNames = { ...(path.dragonNames ?? {}) };
+    const name = next.trim();
+    if (name) dragonNames[dragonId] = name;
+    else delete dragonNames[dragonId];
+    setPath({ ...path, dragonNames });
+  }
+
+  function showDragonInHeart(dragonId: string) {
+    setPath({ ...path, forestHeartDragonId: dragonId });
   }
 
   const [sharing, setSharing] = useState(false);
@@ -112,8 +151,36 @@ export function MyProfile() {
               )}
             </div>
             <div className="profile-identity">{identity.label} · {identity.element.toLowerCase()}</div>
+            {dragonHallUnlocked && (
+              <div className="profile-title-badge">Та, кого признали драконы</div>
+            )}
           </div>
         </div>
+        {identity.id === 'green' && birthdayTitle && (
+          <div className="birthday-profile-gift">
+            <span><img src={birthdayArt.sparks} alt="" /></span>
+            <div>
+              <strong>{birthdaySparks || 34} искры желания</strong>
+              <em>{birthdayTitle}</em>
+            </div>
+          </div>
+        )}
+        {identity.id === 'green' && birthdayTitle && (
+          <section className="birthday-constellation rise" aria-label="Созвездие 34 искр">
+            <div className="birthday-constellation__head">
+              <div>
+                <div className="eyebrow">Личное созвездие</div>
+                <h3>34 огонька для лесной ведьмы</h3>
+              </div>
+              <strong>{birthdaySparks || 34}</strong>
+            </div>
+            <button className="image-preview birthday-stars" type="button" onClick={() => setLightbox({ src: birthdayArt.stars, title: '34 огонька для лесной ведьмы' })} aria-label="Открыть созвездие">
+              <img className="birthday-stars__art" src={birthdayArt.stars} alt="" />
+            </button>
+            <p>Каждый огонек хранит отдельное “за тебя”: за смелость, нежность, смех, сны и всю магию, которая стала тобой.</p>
+            <Link className="btn btn--block" to="/forest-heart">Открыть сердце леса</Link>
+          </section>
+        )}
         {identity.description && <p className="identity-desc">{identity.description}</p>}
 
         {/* Мастерство своего пути — растёт быстрее со «своим» фамильяром */}
@@ -149,7 +216,11 @@ export function MyProfile() {
               return (
                 <div className="familiar-card" key={companion.id}>
                   {famPortrait
-                    ? <img className="familiar-card__portrait" src={famPortrait} alt={familiar.name} />
+                    ? (
+                      <button className="image-preview familiar-card__portrait-wrap" type="button" onClick={() => setLightbox({ src: famPortrait, title: famName })} aria-label={`Open image: ${famName}`}>
+                        <img className="familiar-card__portrait" src={famPortrait} alt={familiar.name} />
+                      </button>
+                    )
                     : <span className="familiar-card__glyph">{familiar.glyph}</span>}
                   <div className="familiar-card__body">
                     <div className="familiar-card__namerow">
@@ -160,7 +231,7 @@ export function MyProfile() {
                       </div>
                     </div>
                     <div className="meta">
-                      {index === 0 ? 'первый спутник' : 'второй спутник'} · {familiar.name}
+                      {index === 0 ? 'первый спутник' : index === 1 ? 'второй спутник' : 'третий спутник'} · {familiar.name}
                       {famKin ? <> · ближе к пути «{famKin.label}»</> : <> · вольный спутник</>}
                     </div>
                     <div className="familiar-bond" aria-label={`Связь: ${companion.bond}`}>
@@ -173,9 +244,11 @@ export function MyProfile() {
               );
             })}
             <p className="muted" style={{ margin: '4px 0 0' }}>
-              {hasSecondFamiliarSlot(path)
-                ? companions.length < 2 ? 'Второй спутник уже может присоединиться на тропе.' : 'Два спутника влияют на путь вместе.'
-                : 'Второй спутник откроется, когда связь с фамильяром станет неразлучной.'}
+              {hasThirdFamiliarSlot(path)
+                ? companions.length < 3 ? 'Все драконы признали тебя: третий спутник уже может присоединиться на тропе.' : 'Три спутника идут рядом: это дар полного Зала драконов.'
+                : hasSecondFamiliarSlot(path)
+                  ? companions.length < familiarSlots ? 'Второй спутник уже может присоединиться на тропе.' : 'Два спутника влияют на путь вместе.'
+                  : 'Второй спутник откроется, когда связь с фамильяром станет неразлучной. Третий — когда с тобой подружатся все драконы.'}
             </p>
             {influenceHint && <p className="familiar-influence">{influenceHint}</p>}
           </div>
@@ -184,20 +257,49 @@ export function MyProfile() {
         )}
 
         {/* Драконы-друзья */}
-        {befriendedDragons(path).length > 0 && (
+        {dragonFriends.length > 0 && (
           <>
-            <h2 className="section-title">{befriendedDragons(path).length > 1 ? 'Драконы-друзья' : 'Дракон-друг'}</h2>
-            <div className="stack stack--tight">
-              {befriendedDragons(path).map((id) => {
+            <h2 className="section-title">{dragonHallUnlocked ? 'Зал драконов' : dragonFriends.length > 1 ? 'Драконы-друзья' : 'Дракон-друг'}</h2>
+            {dragonHallUnlocked && (
+              <div className="dragon-hall-crown rise">
+                <button className="image-preview dragon-hall-crown__art" type="button" onClick={() => setLightbox({ src: birthdayArt.dragonHall, title: 'Зал драконов' })} aria-label="Открыть зал драконов">
+                  <img src={birthdayArt.dragonHall} alt="" />
+                </button>
+                <strong>Драконы признали тебя</strong>
+                <span>Драконы уже стоят вокруг твоей тропы: каждый хранит свою сторону твоей силы, а зал открывает двери новым союзникам.</span>
+              </div>
+            )}
+            <div className={dragonHallUnlocked ? 'dragon-hall-grid' : 'stack stack--tight'}>
+              {dragonFriends.map((id) => {
                 const d = dragonById(id);
                 if (!d) return null;
+                const dragonArt = pathArtFor(d.art);
+                const dragonName = dragonDisplayName(id, d.name);
+                const selectedForHeart = path.forestHeartDragonId === id;
                 return (
-                  <div className="familiar-card" key={id}>
-                    <span className="familiar-card__glyph">{d.glyph}</span>
-                    <div className="familiar-card__body">
-                      <div className="familiar-card__namerow"><h3>{d.name}</h3></div>
-                      <div className="meta">редкая встреча на тропе</div>
+                  <div className={dragonHallUnlocked ? 'dragon-hall-card' : 'familiar-card'} key={id}>
+                    <button className="image-preview familiar-card__portrait-wrap" type="button" onClick={() => setLightbox({ src: dragonArt, title: dragonName })} aria-label={`Open image: ${dragonName}`}>
+                      <img className="familiar-card__portrait" src={dragonArt} alt={d.name} />
+                    </button>
+                    <div className={dragonHallUnlocked ? 'dragon-hall-card__body' : 'familiar-card__body'}>
+                      <div className="familiar-card__namerow">
+                        <h3>{dragonName}</h3>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          <button className="chip" type="button" onClick={() => renameDragon(id)}>✎ имя</button>
+                          <button className={'chip' + (selectedForHeart ? ' chip--active' : '')} type="button" onClick={() => showDragonInHeart(id)}>
+                            в сердце
+                          </button>
+                        </div>
+                      </div>
+                      <div className="meta">редкая встреча на тропе{dragonName !== d.name ? <> · {d.name}</> : null}</div>
                       <p className="familiar-card__blurb">{d.blurb}</p>
+                      {dragonHallUnlocked && <p className="dragon-hall-card__guard">{DRAGON_GUARDIANS[id]}</p>}
+                      {dragonHallUnlocked && dragonOaths[id] && (
+                        <p className="dragon-hall-card__oath">
+                          <span>Клятва</span>
+                          {dragonOaths[id]}
+                        </p>
+                      )}
                     </div>
                   </div>
                 );
@@ -205,6 +307,28 @@ export function MyProfile() {
             </div>
           </>
         )}
+
+        {/* Хранитель леса */}
+        {keeperFriend && (() => {
+          const keeperArt = pathArtFor(forestKeeper.art);
+          return (
+            <>
+              <h2 className="section-title">Хранитель леса</h2>
+              <div className="stack stack--tight">
+                <div className="familiar-card">
+                  <button className="image-preview familiar-card__portrait-wrap" type="button" onClick={() => setLightbox({ src: keeperArt, title: forestKeeper.name })} aria-label={`Open image: ${forestKeeper.name}`}>
+                    <img className="familiar-card__portrait" src={keeperArt} alt={forestKeeper.name} />
+                  </button>
+                  <div className="familiar-card__body">
+                    <div className="familiar-card__namerow"><h3>{forestKeeper.name}</h3></div>
+                    <div className="meta">лес признал тебя своей</div>
+                    <p className="familiar-card__blurb">{forestKeeper.blurb}</p>
+                  </div>
+                </div>
+              </div>
+            </>
+          );
+        })()}
 
         {/* Навыки */}
         <h2 className="section-title">Перенятые ремёсла</h2>
@@ -249,8 +373,10 @@ export function MyProfile() {
                 <div className="eyebrow" style={{ marginBottom: 8 }}>Обереги</div>
                 <div className="trinket-grid">
                   {amulets.map((t) => (
-                    <div key={t.id} className="trinket trinket--amulet" title={t.name}>
-                      <span className="trinket__glyph">{t.glyph}</span>
+                    <div key={t.id} className={'trinket trinket--amulet' + (t.id === 'birthday-heart' ? ' trinket--photo' : '')} title={t.name}>
+                      {t.id === 'birthday-heart'
+                        ? <img className="trinket__photo" src={birthdayArt.amulet} alt="" />
+                        : <span className="trinket__glyph">{t.glyph}</span>}
                       <span className="trinket__name">{t.name}</span>
                     </div>
                   ))}
@@ -293,6 +419,9 @@ export function MyProfile() {
         <button className="btn btn--ghost btn--block" onClick={resetPath} style={{ color: 'var(--ember)' }}>Начать тропинку заново</button>
         <div className="spacer" />
       </div>
+      {lightbox && (
+        <ImageLightbox src={lightbox.src} title={lightbox.title} alt={lightbox.title} onClose={() => setLightbox(null)} />
+      )}
     </>
   );
 }

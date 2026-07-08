@@ -55,6 +55,7 @@ import card50 from './cards/card-50.webp';
 import card51 from './cards/card-51.webp';
 import card52 from './cards/card-52.webp';
 import card53 from './cards/card-53.webp';
+import card100 from './cards/card-100.webp';
 
 import rune1 from './runes/rune-1.webp';
 import rune2 from './runes/rune-2.webp';
@@ -81,6 +82,13 @@ import rune22 from './runes/rune-22.webp';
 import rune23 from './runes/rune-23.webp';
 import rune25 from './runes/rune-25.webp';
 
+import birthdayLetterArt from './birthday/letter.webp';
+import birthdaySparksArt from './birthday/sparks.webp';
+import birthdayAmuletArt from './birthday/amulet.webp';
+import birthdayDragonHallArt from './birthday/dragon-hall.webp';
+import birthdayStarsArt from './birthday/stars.webp';
+import dragonFlightVideo from './video/fly.mp4';
+
 import wheelYule from './wheel/yule.webp';
 import wheelImbolc from './wheel/imbolc.webp';
 import wheelOstara from './wheel/ostara.webp';
@@ -89,6 +97,15 @@ import wheelLitha from './wheel/litha.webp';
 import wheelLughnasadh from './wheel/lughnasadh.webp';
 import wheelMabon from './wheel/mabon.webp';
 import wheelSamhain from './wheel/samhain.webp';
+
+/** Праздничные арты подарка ко дню рождения (личное письмо, искры, оберег). */
+export const birthdayArt = {
+  letter: birthdayLetterArt,
+  sparks: birthdaySparksArt,
+  amulet: birthdayAmuletArt,
+  dragonHall: birthdayDragonHallArt,
+  stars: birthdayStarsArt,
+};
 
 export const backgrounds: string[] = [
   bg01, bg02, bg03, bg04, bg05, bg06, bg07, bg08, bg09,
@@ -127,6 +144,7 @@ export const cardArtById: Record<string, string> = {
   'card-51': card51,
   'card-52': card52,
   'card-53': card53,
+  'card-100': card100,
 };
 
 /** Прямое соответствие rune_id → URL изображения руны. */
@@ -147,6 +165,14 @@ export const pathArtById: Record<string, string> = Object.fromEntries(
     return [file.replace(/\.webp$/i, ''), url];
   }),
 );
+
+export const pathVideoById: Record<string, string> = {
+  'dragon-flight': dragonFlightVideo,
+};
+
+export function pathVideoFor(key: string): string | undefined {
+  return pathVideoById[key];
+}
 
 /** Портреты фамильяров: src/assets/familiars/familiar-<id>.webp → ключ по id ('cat'). */
 const familiarModules = import.meta.glob('./familiars/familiar-*.webp', { eager: true, import: 'default' }) as Record<string, string>;

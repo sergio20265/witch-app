@@ -9,7 +9,7 @@ import { pathEvents, quietLinesFor, type PathEvent } from '../data/pathEvents';
 import {
   STEPS_PER_DAY, STEPS_PER_WINDOW, SKILL_THRESHOLD, CROSSROAD_THRESHOLD,
   FAMILIAR_BOND_MIN, FAMILIAR_BOND_MAX, SECOND_FAMILIAR_BOND,
-  familiars, familiarAffinity, trinkets, dragons,
+  familiars, familiarAffinity, trinkets, dragons, forestKeeper,
 } from '../data/path';
 import { identityFor } from '../data/identities';
 import type { PathState, PathLogEntry, PathFamiliarState, PathAltarKind, PathPotionEffect, PathDevelopmentState } from '../storage/types';
@@ -40,6 +40,11 @@ const DRAGON_CHANCE = 1;
 /** Шанс познакомиться с драконом на втором подарочном шаге зелёной ведьмы. */
 const GIFT_DRAGON_CHANCE = 25;
 const FAMILIAR_EVENT_CHANCE = 12;
+const DRAGON_EVENT_CHANCE = 10;
+/** Хранитель леса приходит только к лесной ведьме и лишь когда лес её уже принял. */
+const KEEPER_MIN_GREEN_AFFINITY = 3;
+const KEEPER_BASE_CHANCE = 4;
+const KEEPER_EVENT_CHANCE = 12;
 const MAX_FOREST_ATTENTION = 6;
 
 export function forestAttentionLevel(state: PathState): number {
@@ -105,6 +110,7 @@ const trinketTags: Record<string, AltarTag[]> = {
   mirror: ['city', 'mystic', 'lunar'],
   'sig-witch': ['witch', 'portable'],
   'sig-green': ['forest', 'green', 'root'],
+  'birthday-heart': ['forest', 'green', 'root', 'luck'],
   'sig-hedge': ['forest', 'hedge', 'threshold'],
   'sig-kitchen': ['kitchen', 'home', 'practical'],
   'sig-hearth': ['hearth', 'home'],
@@ -373,21 +379,38 @@ function syncLegacy(state: PathState, companions: PathFamiliarState[]): PathStat
 
 const familiarIds = new Set(familiars.map((f) => f.id));
 
-export function activeFamiliars(state: PathState): PathFamiliarState[] {
+function storedFamiliars(state: PathState): PathFamiliarState[] {
   if (state.familiars && state.familiars.length > 0) {
     return state.familiars
       // Раньше фильтровали по familiarAffinity и роняли нейтральных (универсальных)
       // спутников; теперь проверяем лишь, что фамильяр существует.
       .filter((f) => familiarIds.has(f.id))
-      .map((f) => ({ ...f, bond: clampBond(f.bond ?? 0) }))
-      .slice(0, 2);
+      .map((f) => ({ ...f, bond: clampBond(f.bond ?? 0) }));
   }
   return state.familiar ? [{ id: state.familiar, name: state.familiarName, bond: 1 }] : [];
 }
 
+export function activeFamiliars(state: PathState): PathFamiliarState[] {
+  return storedFamiliars(state).slice(0, maxFamiliarSlots(state));
+}
+
+export function hasAllDragonFriends(state: PathState): boolean {
+  const have = new Set(befriendedDragons(state));
+  return dragons.length > 0 && dragons.every((dragon) => have.has(dragon.id));
+}
+
 export function hasSecondFamiliarSlot(state: PathState): boolean {
-  const companions = activeFamiliars(state);
+  const companions = storedFamiliars(state);
   return Boolean(state.secondFamiliarUnlocked || companions.length > 1 || companions.some((f) => f.bond >= SECOND_FAMILIAR_BOND));
+}
+
+export function hasThirdFamiliarSlot(state: PathState): boolean {
+  return hasAllDragonFriends(state);
+}
+
+export function maxFamiliarSlots(state: PathState): number {
+  if (hasThirdFamiliarSlot(state)) return 3;
+  return hasSecondFamiliarSlot(state) ? 2 : 1;
 }
 
 export function familiarBondLabel(bond: number): string {
@@ -452,11 +475,29 @@ export function befriendedDragons(state: PathState): string[] {
 }
 
 /** Выбрать дракона для встречи — из тех, с кем ещё не подружились. */
-function pickDragon(state: PathState, seed: number): string | null {
+function pickDragon(state: PathState, seed: number, identityId?: string): string | null {
   const have = new Set(befriendedDragons(state));
+  if (identityId === 'witch' && !have.has('black')) return 'black';
   const pool = dragons.filter((d) => !have.has(d.id));
   if (pool.length === 0) return null;
   return pool[hash(`dragon-which-${seed}-${state.step}`) % pool.length].id;
+}
+
+/** Подружилась ли уже лесная ведьма с Хранителем леса. */
+export function hasKeeperFriend(state: PathState): boolean {
+  return Boolean(state.keeperFriend);
+}
+
+/** Может ли Хранитель леса вообще выйти навстречу этой ведьме на этом шаге. */
+function keeperEligible(state: PathState, identityId: string): boolean {
+  return identityId === 'green' && (state.affinity['green'] ?? 0) >= KEEPER_MIN_GREEN_AFFINITY;
+}
+
+/** Шанс встретить Хранителя (в процентах за шаг), пока с ним ещё не подружились. */
+function keeperChance(state: PathState, identityId: string): number {
+  if (!keeperEligible(state, identityId) || hasKeeperFriend(state)) return 0;
+  const green = state.affinity['green'] ?? 0;
+  return Math.min(12, KEEPER_BASE_CHANCE + Math.floor(green / 3) + Math.floor(forestAttentionLevel(state) / 3));
 }
 
 function pickFamiliarId(state: PathState, identityId: string, seed: number): string {
@@ -479,6 +520,28 @@ export interface FamiliarInteraction {
   title: string;
   text: string;
   choices: FamiliarInteractionChoice[];
+}
+
+export interface DragonInteractionChoice {
+  text: string;
+  outcome: string;
+  affinity?: Record<string, number>;
+  attention?: number;
+  bonusSteps?: number;
+}
+
+export interface DragonInteraction {
+  dragonId: string;
+  title: string;
+  text: string;
+  choices: DragonInteractionChoice[];
+}
+
+/** Сценка дружбы с Хранителем леса — тот же набор эффектов, что у драконьих. */
+export interface KeeperInteraction {
+  title: string;
+  text: string;
+  choices: DragonInteractionChoice[];
 }
 
 export type ForestAttentionChoice = 'hide' | 'press';
@@ -723,6 +786,181 @@ function deriveFamiliarInteraction(state: PathState, identityId: string, seed: n
   return { familiarId: companion.id, title: template.title, text: template.text(name), choices: template.choices(flavorType) };
 }
 
+interface DragonInteractionTemplate {
+  title: string;
+  text: (name: string) => string;
+  choices: (dragonId: string, identityId: string) => DragonInteractionChoice[];
+}
+
+const dragonInteractionTemplates: DragonInteractionTemplate[] = [
+  {
+    title: 'Полёт над тропой',
+    text: (name) => `${name} опускает крыло так низко, будто предлагает подняться над лесом и посмотреть на свой путь сверху.`,
+    choices: (_dragonId, identityId) => [
+      {
+        text: 'Взлететь вместе',
+        affinity: { [identityId]: 1 },
+        bonusSteps: 1,
+        attention: -1,
+        outcome: 'С высоты тропа перестаёт казаться запутанной. Ты видишь, где она бережёт тебя, а где просто проверяет. После полёта сил хватает ещё на один шаг.',
+      },
+      {
+        text: 'Остаться у земли',
+        attention: -1,
+        outcome: 'Ты остаёшься внизу и гладишь тёплую чешую у крыла. Иногда доверие — не взлететь, а честно признать: сегодня хочется тише.',
+      },
+    ] as DragonInteractionChoice[],
+  },
+  {
+    title: 'Драконья стража',
+    text: (name) => `${name} ложится рядом, закрывая тебя от ветра. В его присутствии даже тревожные мысли говорят тише.`,
+    choices: (_dragonId, identityId) => [
+      {
+        text: 'Отдохнуть под крылом',
+        affinity: { [identityId]: 1 },
+        attention: -2,
+        outcome: 'Под крылом становится спокойно, как в доме, который помнит тебя с детства. Путь перестаёт всматриваться так пристально.',
+      },
+      {
+        text: 'Попросить сторожить сон',
+        attention: -1,
+        outcome: 'Дракон закрывает глаза последним. Сон выходит глубоким и ровным, будто ночь сама решила быть доброй.',
+      },
+    ] as DragonInteractionChoice[],
+  },
+  {
+    title: 'Знак на чешуе',
+    text: (name) => `На чешуе ${name.toLowerCase()} проступает тонкий светлый знак. Он не похож на букву, но почему-то кажется ответом.`,
+    choices: (_dragonId, identityId) => [
+      {
+        text: 'Прочесть знак сердцем',
+        affinity: { [identityId]: 1, mystic: 1 },
+        outcome: 'Ты не переводишь знак в слова. Он просто становится знанием: не всё важное обязано быть объяснено.',
+      },
+      {
+        text: 'Запомнить узор',
+        affinity: { 'rune-witch': 1 },
+        outcome: 'Ты запоминаешь изгибы света. Позже рука сама повторит этот узор там, где понадобится защита.',
+      },
+    ] as DragonInteractionChoice[],
+  },
+  {
+    title: 'Тёплая искра',
+    text: (name) => `${name} выдыхает маленькую искру. Она кружит у твоей ладони и ждёт, что ты решишь с ней делать.`,
+    choices: (_dragonId, identityId) => [
+      {
+        text: 'Спрятать искру в сердце',
+        affinity: { [identityId]: 1, sun: 1 },
+        outcome: 'Искра входит мягко, без боли. Внутри становится чуть теплее, будто кто-то оставил маленький огонь на потом.',
+      },
+      {
+        text: 'Отпустить искру в лес',
+        attention: -1,
+        outcome: 'Искра улетает между деревьями, и лес отвечает едва заметным свечением. Путь благодарит за то, что ты не всё берёшь себе.',
+      },
+    ] as DragonInteractionChoice[],
+  },
+];
+
+function deriveDragonInteraction(state: PathState, identityId: string, seed: number): DragonInteraction | null {
+  const friends = befriendedDragons(state);
+  if (friends.length === 0) return null;
+  const dragonId = friends[hash(`dragon-event-who-${seed}-${state.step}`) % friends.length];
+  const dragon = dragons.find((d) => d.id === dragonId);
+  if (!dragon) return null;
+  const template = dragonInteractionTemplates[hash(`dragon-event-${seed}-${state.step}`) % dragonInteractionTemplates.length];
+  return {
+    dragonId,
+    title: template.title,
+    text: template.text(dragon.name),
+    choices: template.choices(dragonId, identityId),
+  };
+}
+
+interface KeeperInteractionTemplate {
+  title: string;
+  text: string;
+  choices: (identityId: string) => DragonInteractionChoice[];
+}
+
+const keeperInteractionTemplates: KeeperInteractionTemplate[] = [
+  {
+    title: 'Тайная тропа',
+    text: 'Хранитель раздвигает рогами-корнями завесу орешника, за которой пряталась тропа, невидимая чужому глазу. Он ждёт, пойдёшь ли ты за ним.',
+    choices: (identityId) => [
+      {
+        text: 'Пойти за ним в чащу',
+        affinity: { [identityId]: 1, hedge: 1 },
+        bonusSteps: 1,
+        attention: -1,
+        outcome: 'Тайная тропа выводит тебя короче и мягче любой знакомой. Лес бережёт своих, и на этот дар сил хватает ещё на один шаг.',
+      },
+      {
+        text: 'Остаться на своей тропе',
+        attention: -1,
+        outcome: 'Ты благодаришь, но идёшь как шла. Хранитель одобрительно урчит: своей дороге ведьма тоже вправе доверять.',
+      },
+    ] as DragonInteractionChoice[],
+  },
+  {
+    title: 'Дар чащи',
+    text: 'Хранитель разжимает ладонь-корягу: на ней лежит то, что лес приберёг для тебя. Он молча предлагает выбрать, чем ответить.',
+    choices: (identityId) => [
+      {
+        text: 'Принять дар с поклоном',
+        affinity: { [identityId]: 1, green: 1 },
+        outcome: 'Ты берёшь дар обеими руками, как берут хлеб. Между тобой и лесом становится теплее на одну благодарность.',
+      },
+      {
+        text: 'Попросить взамен научить слушать лес',
+        affinity: { mystic: 1 },
+        outcome: 'Хранитель кладёт палец к губам, и на миг ты слышишь чащу целиком: сок в стволах, мышь под листвой, дальний родник. Урок останется с тобой.',
+      },
+    ] as DragonInteractionChoice[],
+  },
+  {
+    title: 'Больное дерево',
+    text: 'Хранитель подводит тебя к молодой рябине с почерневшей корой. В его смолистых глазах — тихая просьба: ты ведь знаешь травы.',
+    choices: (identityId) => [
+      {
+        text: 'Заговорить и подлечить деревце',
+        affinity: { [identityId]: 1, green: 1 },
+        attention: -1,
+        outcome: 'Ты обкладываешь ствол влажным мхом и шепчешь то, что знаешь. Рябина отвечает дрожью листвы. Хранитель склоняет рога — ты прошла его тихий экзамен.',
+      },
+      {
+        text: 'Признаться, что не умеешь, и просто побыть рядом',
+        affinity: { hedge: 1 },
+        outcome: 'Ты честно говоришь, что не всё в твоих силах, и просто кладёшь ладонь на кору. Хранитель ценит честность не меньше умения.',
+      },
+    ] as DragonInteractionChoice[],
+  },
+  {
+    title: 'Стража на ночь',
+    text: 'Сумерки густеют, и Хранитель садится у твоего привала огромной тенью, от которой веет покоем нагретой солнцем коры. Лес вокруг стихает.',
+    choices: (identityId) => [
+      {
+        text: 'Уснуть под его охраной',
+        affinity: { [identityId]: 1 },
+        attention: -2,
+        outcome: 'Ты засыпаешь так крепко, как в детстве. Ни один морок не подходит к костру, пока рядом хозяин леса. Путь перестаёт всматриваться так пристально.',
+      },
+      {
+        text: 'Просидеть ночь с ним, слушая лес',
+        affinity: { mystic: 1 },
+        attention: -1,
+        outcome: 'Вы молчите вдвоём до рассвета, и лес рассказывает тебе больше, чем любая книга. Иное знание приходит только в тишине.',
+      },
+    ] as DragonInteractionChoice[],
+  },
+];
+
+function deriveKeeperInteraction(state: PathState, identityId: string, seed: number): KeeperInteraction | null {
+  if (!hasKeeperFriend(state)) return null;
+  const template = keeperInteractionTemplates[hash(`keeper-event-${seed}-${state.step}`) % keeperInteractionTemplates.length];
+  return { title: template.title, text: template.text, choices: template.choices(identityId) };
+}
+
 export function deriveFamiliarNudge(state: PathState, identityId: string, today: string): FamiliarInteraction | null {
   if (state.lastFamiliarNudgeDate === today) return null;
   if (state.lastFamiliarGiftDate === today) return null;
@@ -783,6 +1021,17 @@ const pathSpells: PathSpell[] = [
     outcome: 'Ты прикладываешь ладонь к земле, и корни отвечают едва заметным теплом. В траве находится лист с прожилками, похожими на карту.',
   },
   {
+    id: 'green-mending',
+    craft: 'green',
+    name: 'Зелёная заплата',
+    glyph: '🌱',
+    hint: 'залечить рану тропы и получить благодарность леса',
+    affinity: { green: 1, hearth: 1 },
+    trinket: 'acorn',
+    attention: -2,
+    outcome: 'Ты прикрываешь разрыв в земле мхом и тёплой ладонью. Тропа перестаёт сочиться холодом, а у корней остаётся крепкий жёлудь.',
+  },
+  {
     id: 'hedge-thread',
     craft: 'hedge',
     name: 'Нить межи',
@@ -791,6 +1040,17 @@ const pathSpells: PathSpell[] = [
     affinity: { hedge: 1 },
     attention: -2,
     outcome: 'Ты вытягиваешь невидимую нить между здесь и там. Морок расходится мягко, будто занавес, и путь перестает следить так пристально.',
+  },
+  {
+    id: 'gate-step',
+    craft: 'hedge',
+    name: 'Шаг через калитку',
+    glyph: '🚪',
+    hint: 'обойти закрытое место коротким переходом',
+    affinity: { hedge: 1, astral: 1 },
+    bonusSteps: 1,
+    attention: -1,
+    outcome: 'Ты находишь калитку там, где была только тень между ветками. Один шаг — и трудный участок остаётся позади.',
   },
   {
     id: 'hearth-spark',
@@ -805,6 +1065,17 @@ const pathSpells: PathSpell[] = [
     outcome: 'Ты прячешь маленькую искру в ладонях. Она не обжигает, а греет, и дорога дает еще один лишний шаг.',
   },
   {
+    id: 'hearth-ward',
+    craft: 'hearth',
+    name: 'Тёплый круг',
+    glyph: '🕯️',
+    hint: 'защититься от холода, страха и чужого взгляда',
+    affinity: { hearth: 1 },
+    trinket: 'dried-flower',
+    attention: -2,
+    outcome: 'Ты ставишь вокруг себя круг домашнего тепла. Всё лишнее остаётся за его краем, а в центре пахнет сухими цветами и спокойствием.',
+  },
+  {
     id: 'kitchen-pinch',
     craft: 'kitchen',
     name: 'Щепотка верного вкуса',
@@ -813,6 +1084,17 @@ const pathSpells: PathSpell[] = [
     affinity: { kitchen: 1 },
     trinket: 'nest',
     outcome: 'Ты пробуешь воздух на вкус и безошибочно выбираешь маленькую вещь для будущего варева. В котомке появляется уютная кухонная находка.',
+  },
+  {
+    id: 'kitchen-broth',
+    craft: 'kitchen',
+    name: 'Бульон примирения',
+    glyph: '🍲',
+    hint: 'накормить место, существо или спор, чтобы он смягчился',
+    affinity: { kitchen: 1, hearth: 1 },
+    bonusSteps: 1,
+    attention: -1,
+    outcome: 'Ты варишь на ладони невозможный маленький бульон. Пар пахнет домом, и даже упрямая тропа на миг становится сговорчивее.',
   },
   {
     id: 'moon-water',
@@ -826,6 +1108,16 @@ const pathSpells: PathSpell[] = [
     outcome: 'Ты смотришь в тонкую лунную пленку на воде. Отражение показывает не лицо, а знак, который стоит взять с собой.',
   },
   {
+    id: 'waning-veil',
+    craft: 'lunar',
+    name: 'Убывающая завеса',
+    glyph: '🌘',
+    hint: 'снять лишний страх и спрятать след',
+    affinity: { lunar: 1, mystic: 1 },
+    attention: -2,
+    outcome: 'Ты проводишь ладонью по воздуху, как по лунной воде. Всё громкое убывает: шаг, тревога, чужой взгляд.',
+  },
+  {
     id: 'sun-mark',
     craft: 'sun',
     name: 'Солнечная метка',
@@ -836,6 +1128,17 @@ const pathSpells: PathSpell[] = [
     outcome: 'Ты ставишь на воздухе теплую метку. Она вспыхивает и гаснет, оставляя после себя маленький знак удачи.',
   },
   {
+    id: 'noon-courage',
+    craft: 'sun',
+    name: 'Полуденная смелость',
+    glyph: '🌻',
+    hint: 'пройти опасное место открыто и без дрожи',
+    affinity: { sun: 1, storm: 1 },
+    bonusSteps: 1,
+    attention: 1,
+    outcome: 'Ты зовёшь в грудь полуденное солнце. Страх отступает, дорога раскрывается быстрее, но такой свет трудно не заметить.',
+  },
+  {
     id: 'salt-call',
     craft: 'sea',
     name: 'Соленый зов',
@@ -844,6 +1147,17 @@ const pathSpells: PathSpell[] = [
     affinity: { sea: 1 },
     trinket: 'shell',
     outcome: 'Ты произносишь слово с привкусом соли. Где бы ни была тропа, она на миг пахнет морем, а у ног оказывается ракушка.',
+  },
+  {
+    id: 'tide-untie',
+    craft: 'sea',
+    name: 'Прилив развяжет',
+    glyph: '🌊',
+    hint: 'распутать узел, спор или заклятую нить',
+    affinity: { sea: 1, lunar: 1 },
+    trinket: 'holed-stone',
+    attention: -1,
+    outcome: 'Ты просишь прилив сделать то, что умеет вода: войти в каждую петлю. Узел слабеет, а в ладони остаётся камень с дырочкой.',
   },
   {
     id: 'storm-breath',
@@ -857,6 +1171,18 @@ const pathSpells: PathSpell[] = [
     outcome: 'Ты выдыхаешь навстречу ветру, и воздух отвечает. Тропа становится резче и быстрее, дарит лишний шаг, но тоже запоминает этот шум.',
   },
   {
+    id: 'thunder-cut',
+    craft: 'storm',
+    name: 'Громовой разрыв',
+    glyph: '⚡',
+    hint: 'разбить застойную преграду ценой громкого следа',
+    affinity: { storm: 1 },
+    trinket: 'bell',
+    bonusSteps: 1,
+    attention: 2,
+    outcome: 'Ты хлопаешь в ладони, и тишина трескается, как небо перед грозой. Преграда падает, колокольчик звенит в котомке, а путь смотрит вслед.',
+  },
+  {
     id: 'star-map',
     craft: 'astral',
     name: 'Звездная карта',
@@ -867,6 +1193,16 @@ const pathSpells: PathSpell[] = [
     outcome: 'Ты соединяешь взглядом три далекие точки света. Между ними проступает маршрут, а рядом ложится легкое перо.',
   },
   {
+    id: 'dream-scout',
+    craft: 'astral',
+    name: 'Разведка сном',
+    glyph: '🌌',
+    hint: 'послать сон вперёд и узнать безопасный поворот',
+    affinity: { astral: 1, mystic: 1 },
+    attention: -1,
+    outcome: 'Ты отпускаешь вперёд лёгкий сон, и он возвращается запахом звёздной пыли. Теперь ты знаешь, где тропа не кусается.',
+  },
+  {
     id: 'veil-question',
     craft: 'mystic',
     name: 'Вопрос завесе',
@@ -875,6 +1211,17 @@ const pathSpells: PathSpell[] = [
     affinity: { mystic: 1 },
     trinket: 'bell',
     outcome: 'Ты задаешь вопрос не вслух, а вниманием. Завеса отвечает звоном: маленький колокольчик оказывается у тебя в руке.',
+  },
+  {
+    id: 'omen-reading',
+    craft: 'mystic',
+    name: 'Чтение трёх знаков',
+    glyph: '👁️',
+    hint: 'понять, какая цена спрятана в выборе',
+    affinity: { mystic: 1 },
+    trinket: 'mirror',
+    attention: -1,
+    outcome: 'Ты находишь три знака: трещину, блик и внезапную тишину. Они складываются в предупреждение, а зеркальце холодит ладонь.',
   },
   {
     id: 'rune-cut',
@@ -888,6 +1235,17 @@ const pathSpells: PathSpell[] = [
     outcome: 'Ты проводишь знак по камню ногтем. Руна держится всего миг, но этого хватает: камешек становится твоим проводником.',
   },
   {
+    id: 'binding-rune',
+    craft: 'rune-witch',
+    name: 'Связующая руна',
+    glyph: 'ᛒ',
+    hint: 'закрепить договор с местом или существом',
+    affinity: { 'rune-witch': 1, witch: 1 },
+    trinket: 'charm-bag',
+    attention: -1,
+    outcome: 'Ты выводишь знак договора: короткий, строгий, без лишней красоты. Место принимает условие, и ладанка теплеет у сердца.',
+  },
+  {
     id: 'city-key',
     craft: 'city',
     name: 'Ключ улиц',
@@ -896,6 +1254,17 @@ const pathSpells: PathSpell[] = [
     affinity: { city: 1 },
     trinket: 'old-key',
     outcome: 'Ты слушаешь городскую паузу между шагами. В ней щелкает невидимый замок, и старый ключ сам просится в котомку.',
+  },
+  {
+    id: 'neon-blindspot',
+    craft: 'city',
+    name: 'Слепая зона неона',
+    glyph: '🏙️',
+    hint: 'ускользнуть через место, куда никто не смотрит',
+    affinity: { city: 1, hedge: 1 },
+    bonusSteps: 1,
+    attention: -1,
+    outcome: 'Ты входишь в промежуток между вывеской, камерой и чужим взглядом. Город моргает — и выпускает тебя на квартал дальше.',
   },
   {
     id: 'witch-circle',
@@ -908,6 +1277,17 @@ const pathSpells: PathSpell[] = [
     attention: -1,
     outcome: 'Ты чертишь малый круг и собираешь в него все, что уже умеешь. После круга остается ладанный мешочек, теплый от силы.',
   },
+  {
+    id: 'borrowed-braid',
+    craft: 'witch',
+    name: 'Коса заимствований',
+    glyph: '✧',
+    hint: 'сплести два ремесла в один ответ',
+    affinity: { witch: 1 },
+    trinket: 'candle-stub',
+    attention: -1,
+    outcome: 'Ты берёшь по нитке от разных традиций и сплетаешь их без спора. Получается не канон, а рабочее заклинание с твоим почерком.',
+  },
 ];
 
 function unlockedCrafts(state: PathState, identityId: string): string[] {
@@ -916,6 +1296,11 @@ function unlockedCrafts(state: PathState, identityId: string): string[] {
     if (points >= Math.floor(SKILL_THRESHOLD / 2)) ids.add(id);
   }
   return [...ids];
+}
+
+export function hasUnlockedCraft(state: PathState, identityId: string, craft: string | string[]): boolean {
+  const required = Array.isArray(craft) ? craft : [craft];
+  return required.some((id) => id === identityId || state.skills.includes(id));
 }
 
 export function availablePathSpells(state: PathState, identityId: string): PathSpell[] {
@@ -935,20 +1320,38 @@ function deriveMagicChallenge(state: PathState, identityId: string, seed: number
     {
       id: 'living-sigil',
       title: 'Живой знак',
-      text: 'На тропе проступает знак, который не хочет быть просто рисунком. Он ждет, каким ремеслом ты ответишь.',
+      text: 'На тропе проступает знак, который шевелится, будто под кожей дороги. Если ответить не тем ремеслом, он сомкнётся и оставит тебя снаружи.',
       art: 'path-dev-general-1',
     },
     {
       id: 'thin-place',
       title: 'Тонкое место',
-      text: 'Воздух становится тоньше, и за обычной дорогой видно еще одну. Здесь можно применить не ноги, а магию.',
+      text: 'Воздух становится тоньше, и за обычной дорогой видно ещё одну: быстрее, опаснее, правдивее. Здесь решает не шаг, а то, какую силу ты уже умеешь держать.',
       art: 'path-dev-mystic',
     },
     {
       id: 'asking-path',
       title: 'Тропа спрашивает',
-      text: 'Ветки, камни, огни или волны будто складываются в вопрос. Ответить можно только тем, что уже стало твоим ремеслом.',
+      text: 'Ветки, камни, огни или волны складываются в вопрос. Ответить можно только ремеслом, которое стало твоим, иначе вопрос вернётся позже и строже.',
       art: identityId === 'city' ? 'path-dev-city' : 'path-dev-general-2',
+    },
+    {
+      id: 'wounded-place',
+      title: 'Рана тропы',
+      text: 'Поперёк дороги лежит тёмная трещина. Из неё тянет холодом старой обиды: место не хочет пропускать, пока кто-то не сделает с ним что-нибудь настоящее.',
+      art: 'event-path-attention',
+    },
+    {
+      id: 'locked-threshold',
+      title: 'Запертый порог',
+      text: 'Перед тобой появляется дверь без стен. За ней слышится нужный путь, но ручка холодна и упряма. Простым усилием её не открыть.',
+      art: identityId === 'city' ? 'path-city-11' : 'path-crossroad',
+    },
+    {
+      id: 'hungry-shadow',
+      title: 'Голодная тень',
+      text: 'Твоя тень отстаёт на полшага и шепчет чужими голосами: усталость, сомнение, старые страхи. Её нужно накормить, успокоить или обмануть.',
+      art: 'path-dev-general-3',
     },
   ];
   const base = variants[hash(`magic-variant-${seed}-${state.step}`) % variants.length];
@@ -1070,7 +1473,10 @@ export type PathStep =
   | { kind: 'event'; event: PathEvent }
   | { kind: 'familiar'; familiarId: string }
   | { kind: 'familiarEvent'; interaction: FamiliarInteraction }
+  | { kind: 'dragonEvent'; interaction: DragonInteraction }
   | { kind: 'dragon'; dragonId: string }
+  | { kind: 'keeper' }
+  | { kind: 'keeperEvent'; interaction: KeeperInteraction }
   | { kind: 'crossroad'; targetId: string };
 
 /** Сцены, доступные текущему типажу и ещё не пройденные. */
@@ -1113,8 +1519,17 @@ export function deriveStep(state: PathState, identityId: string, today: string):
     // Зелёной ведьме — гарантированно её фамильяр, медведь.
     return { kind: 'familiar', familiarId: 'bear' };
   }
+  if (forced === 'birthday-flight') {
+    const flight = pathEvents.find((event) => event.id === 'birthday-dragon-flight');
+    if (flight && !state.seen.includes(flight.id)) return { kind: 'event', event: flight };
+  }
+  if (forced === 'keeper') {
+    // Гарантированная встреча с Хранителем леса (подарок). Если уже подружились —
+    // проваливаемся в обычный рандом, а подарочный шаг снимется при шаге.
+    if (!hasKeeperFriend(state)) return { kind: 'keeper' };
+  }
   if (forced === 'dragon-chance') {
-    const did = pickDragon(state, seed);
+    const did = pickDragon(state, seed, identityId);
     if (did && hash(`gift-dragon-${seed}-${state.step}`) % 100 < GIFT_DRAGON_CHANCE) {
       return { kind: 'dragon', dragonId: did };
     }
@@ -1142,8 +1557,23 @@ export function deriveStep(state: PathState, identityId: string, today: string):
 
   // Редкая случайная встреча с драконом (пока остались незнакомые).
   if (hash(`dragon-${seed}-${state.step}`) % 100 < dragonChance(state, identityId)) {
-    const did = pickDragon(state, seed);
+    const did = pickDragon(state, seed, identityId);
     if (did) return { kind: 'dragon', dragonId: did };
+  }
+
+  const dragonInteraction = deriveDragonInteraction(state, identityId, seed);
+  if (dragonInteraction && hash(`dragon-event-show-${seed}-${state.step}`) % 100 < DRAGON_EVENT_CHANCE) {
+    return { kind: 'dragonEvent', interaction: dragonInteraction };
+  }
+
+  // Редкая первая встреча с Хранителем леса (только у лесной ведьмы, пока не подружились).
+  if (hash(`keeper-${seed}-${state.step}`) % 100 < keeperChance(state, identityId)) {
+    return { kind: 'keeper' };
+  }
+
+  const keeperInteraction = deriveKeeperInteraction(state, identityId, seed);
+  if (keeperInteraction && hash(`keeper-event-show-${seed}-${state.step}`) % 100 < KEEPER_EVENT_CHANCE) {
+    return { kind: 'keeperEvent', interaction: keeperInteraction };
   }
 
   const roll = hash(`step-${seed}-${state.step}`) % 100;
@@ -1240,10 +1670,10 @@ export function commitFamiliar(state: PathState, familiarId: string, adopt: bool
   let next: PathFamiliarState[];
   if (existing) {
     next = companions.map((f) => f.id === familiarId ? { ...f, bond: clampBond(f.bond + 1) } : f);
-  } else if (companions.length < (hasSecondFamiliarSlot(s) ? 2 : 1)) {
+  } else if (companions.length < maxFamiliarSlots(s)) {
     next = [...companions, { id: familiarId, bond: 1 }];
   } else {
-    const replaceIndex = companions.length > 1 && companions[1].bond < companions[0].bond ? 1 : 0;
+    const replaceIndex = companions.reduce((worst, companion, index) => companion.bond < companions[worst].bond ? index : worst, 0);
     next = companions.map((f, i) => i === replaceIndex ? { id: familiarId, bond: 1 } : f);
   }
   // На ближайшие 4 шага новые знакомства не зовут, зато текущий спутник может проявляться в сценках связи.
@@ -1258,10 +1688,93 @@ export function commitDragon(state: PathState, dragonId: string, adopt: boolean,
   return { ...s, dragon: true, dragonFriends };
 }
 
+export function commitDragonInteraction(
+  state: PathState,
+  interaction: DragonInteraction,
+  choice: DragonInteractionChoice,
+  identityId: string,
+  today: string,
+): { state: PathState; learned: string[]; note?: string } {
+  const s = shiftForestAttention(
+    bumpStep(state, today, identityId),
+    softenAttentionDelta(state, (choice.attention ?? 0) + encounterAttentionDelta(identityId, choice.affinity ?? {}, [])),
+  );
+  const affinity = { ...s.affinity };
+  const boosted = choice.affinity ?? {};
+  for (const [k, v] of Object.entries(boosted)) affinity[k] = (affinity[k] || 0) + v;
+
+  const skills = [...s.skills];
+  const learned: string[] = [];
+  for (const [id, v] of Object.entries(affinity)) {
+    if (id !== identityId && v >= SKILL_THRESHOLD && !skills.includes(id)) {
+      skills.push(id);
+      learned.push(id);
+    }
+  }
+
+  const dragon = dragons.find((d) => d.id === interaction.dragonId);
+  const log = pushLog(s, {
+    date: today,
+    eventId: 'dragon-event-' + interaction.dragonId,
+    choice: choice.text,
+    outcome: choice.outcome,
+  });
+  const bonusSteps = (s.bonusSteps ?? 0) + (choice.bonusSteps ?? 0);
+  return {
+    state: { ...s, affinity, skills, log, bonusSteps: bonusSteps > 0 ? bonusSteps : s.bonusSteps },
+    learned,
+    note: choice.bonusSteps ? `${dragon?.name ?? 'Дракон'} открыл ещё один бонусный шаг.` : undefined,
+  };
+}
+
+export function commitKeeper(state: PathState, adopt: boolean, today: string, identityId?: string): PathState {
+  const s = shiftForestAttention(bumpStep(state, today, identityId), softenAttentionDelta(state, adopt ? -2 : -1));
+  if (!adopt) {
+    const log = pushLog(s, { date: today, eventId: 'keeper-meet', choice: 'Поклониться и уйти', outcome: forestKeeper.decline });
+    return { ...s, log };
+  }
+  const log = pushLog(s, { date: today, eventId: 'keeper-meet', choice: 'Подружиться', outcome: forestKeeper.befriend });
+  return { ...s, keeperFriend: true, log };
+}
+
+export function commitKeeperInteraction(
+  state: PathState,
+  _interaction: KeeperInteraction,
+  choice: DragonInteractionChoice,
+  identityId: string,
+  today: string,
+): { state: PathState; learned: string[]; note?: string } {
+  const s = shiftForestAttention(
+    bumpStep(state, today, identityId),
+    softenAttentionDelta(state, (choice.attention ?? 0) + encounterAttentionDelta(identityId, choice.affinity ?? {}, [])),
+  );
+  const affinity = { ...s.affinity };
+  const boosted = choice.affinity ?? {};
+  for (const [k, v] of Object.entries(boosted)) affinity[k] = (affinity[k] || 0) + v;
+
+  const skills = [...s.skills];
+  const learned: string[] = [];
+  for (const [id, v] of Object.entries(affinity)) {
+    if (id !== identityId && v >= SKILL_THRESHOLD && !skills.includes(id)) {
+      skills.push(id);
+      learned.push(id);
+    }
+  }
+
+  const log = pushLog(s, { date: today, eventId: 'keeper-event', choice: choice.text, outcome: choice.outcome });
+  const bonusSteps = (s.bonusSteps ?? 0) + (choice.bonusSteps ?? 0);
+  return {
+    state: { ...s, affinity, skills, log, bonusSteps: bonusSteps > 0 ? bonusSteps : s.bonusSteps },
+    learned,
+    note: choice.bonusSteps ? `${forestKeeper.name} открыл ещё один бонусный шаг.` : undefined,
+  };
+}
+
 export interface EncounterResult {
   affinity: Record<string, number>;
   trinkets: string[];
   attention?: number;
+  bonusSteps?: number;
   choiceText: string;
   outcome: string;
 }
@@ -1384,8 +1897,9 @@ export function commitEncounter(
   if (remaining.length === 0) seen = seen.filter((id) => id.startsWith('crossroad-'));
 
   const log = pushLog(s, { date: today, eventId: event.id, choice: res.choiceText, outcome: res.outcome });
+  const bonusSteps = res.bonusSteps ? (s.bonusSteps ?? 0) + res.bonusSteps : s.bonusSteps;
 
-  return { state: { ...s, affinity, trinkets, seen, skills, log }, learned };
+  return { state: { ...s, affinity, trinkets, seen, skills, bonusSteps, log }, learned };
 }
 
 export function commitMagicChallenge(

@@ -275,6 +275,15 @@ export const dayCards: DayCard[] = [
     category: 'animals',
     rare: true,
   },
+  {
+    id: 'birthday-forest',
+    card_id: 'card-100',
+    name: 'С днем рождения',
+    text: 'Сегодня лес говорит тише обычного, потому что бережет самое важное желание. Пусть рядом будет тепло, а впереди - светлая тропа, на которой тебя выбирают снова и снова.',
+    type: 'настроение' as CardType,
+    category: 'sabbats',
+    rare: true,
+  },
 ];
 
 // Взвешенный пул: обычная карта встречается в RARE_WEIGHT раз чаще редкой.
@@ -316,6 +325,14 @@ export function cardForDate(date?: Date): DayCard {
 
   const now = new Date();
   const today = isoDate(now);
+  if (readStore<string>('userIdentity', '') === 'green') {
+    const birthday = cardById('birthday-forest');
+    if (birthday) {
+      writeStore('dailyCard', { date: today, id: birthday.id });
+      return birthday;
+    }
+  }
+
   const stored = readStore<{ date: string; id: string } | null>('dailyCard', null);
   if (stored && stored.date === today) {
     const fixed = cardById(stored.id);
