@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './lib/ThemeContext';
 import { AppShell } from './components/AppShell';
 import { Home } from './screens/Home';
@@ -29,6 +29,7 @@ import { Altar } from './screens/Altar';
 import { Potions } from './screens/Potions';
 import { Onboarding } from './screens/Onboarding';
 import { readStore } from './storage/useLocalStorage';
+import { isGiftUnlocked } from './lib/giftUnlock';
 
 // HashRouter — устойчив к file:// origin внутри Capacitor WebView.
 export default function App() {
@@ -63,7 +64,7 @@ export default function App() {
           <Route path="tarot" element={<Tarot />} />
           <Route path="path" element={<MyPath />} />
           <Route path="profile" element={<MyProfile />} />
-          <Route path="forest-heart" element={<ForestHeart />} />
+          <Route path="forest-heart" element={isGiftUnlocked() ? <ForestHeart /> : <Navigate to="/more" replace />} />
           <Route path="altar" element={<Altar />} />
           <Route path="potions" element={<Potions />} />
           <Route path="more" element={<More />} />

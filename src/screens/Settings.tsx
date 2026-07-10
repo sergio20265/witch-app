@@ -9,6 +9,8 @@ import { compressImage } from '../lib/compressImage';
 import { Capacitor } from '@capacitor/core';
 import { IDENTITIES, identityFor } from '../data/identities';
 import { daytimeNow, daytimeMeta } from '../lib/daytime';
+import { isGiftUnlocked } from '../lib/giftUnlock';
+import { redeemGiftCode } from '../lib/redeemGift';
 
 const SECTIONS = [
   { route: '/',            label: 'Главная' },
@@ -39,6 +41,9 @@ const KEYS = [
   'personalEvents', 'personalEventCategories',
   'userName', 'userIdentity', 'userAvatar', 'onboarded', 'bgOpacity', 'customBgs',
   'pathFlavor', 'ambient', 'homeLinks', 'randomSeed',
+  // Подарочная разблокировка и связанные флаги — чтобы бэкап/восстановление их сохраняли.
+  'giftUnlocked', 'birthdayGift20260708v5', 'blackDragonGiftV1',
+  'birthdayGiftSparks', 'birthdayGiftTitle', 'forestHeartOpenedSparks',
 ];
 
 export function Settings() {
@@ -55,6 +60,20 @@ export function Settings() {
   const [runeOfDay, setRuneOfDay] = useLocalStorage<boolean>('runeOfDay', false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
+  const [giftUnlocked, setUnlocked] = useState(() => isGiftUnlocked());
+  const [giftCode, setGiftCode] = useState('');
+
+  function submitGiftCode() {
+    if (redeemGiftCode(giftCode)) {
+      setUnlocked(true);
+      setGiftCode('');
+      setMsg('Подарки открыты! 🎁 Загляни на тропинку и в «Сердце леса».');
+      // Перезапуск, чтобы меню, роуты и состояние тропы подхватили подарки.
+      setTimeout(() => window.location.reload(), 1200);
+    } else {
+      setMsg('Такой код не подошёл. Проверь и попробуй ещё раз.');
+    }
+  }
   const avatarRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
   const [pendingRoute, setPendingRoute] = useState<string | null>(null);
@@ -235,6 +254,31 @@ export function Settings() {
               </span>
             </span>
           </button>
+        )}
+
+        {/* Подарочный код */}
+        <h2 className="section-title">Подарочный код</h2>
+        {giftUnlocked ? (
+          <p className="muted" style={{ fontSize: '0.9rem' }}>
+            🎁 Подарки открыты. Лес признал тебя своей — «Сердце леса» ждёт в разделе «Ещё».
+          </p>
+        ) : (
+          <div className="card" style={{ padding: 18 }}>
+            <p className="muted" style={{ fontSize: '0.9rem', marginTop: 0 }}>
+              Если тебе дали особый код — введи его здесь, чтобы открыть праздничные подарки.
+            </p>
+            <input
+              className="field"
+              value={giftCode}
+              placeholder="подарочный код"
+              onChange={(e) => setGiftCode(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submitGiftCode(); }}
+              style={{ marginBottom: 10 }}
+            />
+            <button className="btn btn--primary btn--block" onClick={submitGiftCode} disabled={!giftCode.trim()}>
+              Открыть подарок
+            </button>
+          </div>
         )}
 
         {/* Оформление */}

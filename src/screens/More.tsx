@@ -4,6 +4,7 @@ import { PageBackground } from '../components/PageBackground';
 import { PageHeader } from '../components/PageHeader';
 import { readStore, useLocalStorage } from '../storage/useLocalStorage';
 import { PATH_ENABLED } from '../config';
+import { isGiftUnlocked } from '../lib/giftUnlock';
 
 const links = [
   ...(PATH_ENABLED ? [
@@ -35,9 +36,11 @@ export function More() {
   const [homeLinks, setHomeLinks] = useLocalStorage<string[]>('homeLinks', ['/journal', '/wheel', '/card', '/wishes', '/recipes', '/treasures']);
   const showRune = readStore<string>('userIdentity', '') === 'rune-witch'
     || readStore<boolean>('runeOfDay', false);
-  const baseLinks = showRune
+  const withRune = showRune
     ? [{ to: '/rune', ico: 'ᚱ', label: 'Руна дня', hint: 'знак Старшего Футарка' }, ...links]
     : links;
+  // «Сердце леса» — подарочная комната; видна только тому, кто ввёл подарочный код.
+  const baseLinks = isGiftUnlocked() ? withRune : withRune.filter((link) => link.to !== '/forest-heart');
   const linkMap = new Map(baseLinks.map((link) => [link.to, link]));
   const orderedLinks = [
     ...moreLinksOrder.map((to) => linkMap.get(to)).filter(Boolean),
@@ -125,7 +128,7 @@ export function More() {
         </div>
         <div className="divider">✦</div>
         <p className="muted center script" style={{ fontSize: '1.3rem' }}>Лесной гримуар</p>
-        <p className="faint center" style={{ fontSize: '0.75rem' }}>версия 37 · твоя личная лесная книга</p>
+        <p className="faint center" style={{ fontSize: '0.75rem' }}>версия 40 · твоя личная лесная книга</p>
         <div className="spacer" />
       </div>
     </>

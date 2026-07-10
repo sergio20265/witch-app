@@ -2,6 +2,10 @@
 // Это не гадание. card_id явно указывает, какое изображение использовать.
 import { userSeed } from '../lib/seed';
 import { readStore, writeStore } from '../storage/useLocalStorage';
+import { isGiftUnlocked } from '../lib/giftUnlock';
+
+/** Дата дня рождения: подарочная карта «С днём рождения» выпадает только в этот день. */
+const BIRTHDAY_CARD_DATE = '2026-07-08';
 
 export type CardCategory =
   | 'plants'
@@ -21,7 +25,8 @@ export interface DayCard {
   text: string;
   type: CardType;
   category: CardCategory;
-  rare?: boolean;    // редкая карта — пониженный шанс выпадения
+  rare?: boolean;      // редкая карта — пониженный шанс выпадения
+  legendary?: boolean; // легендарная карта — вдвое реже редкой
 }
 
 export const cardCategoryNames: Record<CardCategory, string> = {
@@ -238,6 +243,71 @@ export const dayCards: DayCard[] = [
     category: 'plants',
   },
 
+  {
+    id: 'moth',
+    card_id: 'card-54',
+    name: 'Мотылёк',
+    text: 'Не каждый свет обжигает. Иногда именно он приводит домой.',
+    type: 'настроение',
+    category: 'animals',
+  },
+  {
+    id: 'young-oak',
+    card_id: 'card-55',
+    name: 'Молодой дубок',
+    text: 'Самые крепкие деревья тоже когда-то были маленькими ростками.',
+    type: 'настроение',
+    category: 'plants',
+  },
+  {
+    id: 'amber-stone',
+    card_id: 'card-56',
+    name: 'Янтарь',
+    text: 'Всё ценное не исчезает. Оно становится частью тебя.',
+    type: 'настроение',
+    category: 'objects',
+  },
+  {
+    id: 'milky-way',
+    card_id: 'card-57',
+    name: 'Млечный путь',
+    text: 'Не бойся мечтать широко. Небо не знает границ.',
+    type: 'настроение',
+    category: 'sky',
+  },
+  {
+    id: 'old-teapot',
+    card_id: 'card-58',
+    name: 'Старый чайник',
+    text: 'Иногда именно чашка тёплого чая делает день счастливым.',
+    type: 'настроение',
+    category: 'objects',
+  },
+  {
+    id: 'owl-feather',
+    card_id: 'card-59',
+    name: 'Перо совы',
+    text: 'Мир разговаривает с теми, кто умеет замечать.',
+    type: 'совет',
+    category: 'objects',
+  },
+  {
+    id: 'wooden-bridge',
+    card_id: 'card-60',
+    name: 'Деревянный мостик',
+    text: 'Иногда один смелый шаг соединяет две разные жизни.',
+    type: 'совет',
+    category: 'objects',
+  },
+  {
+    id: 'green-heart',
+    card_id: 'card-61',
+    name: 'Зелёное сердце',
+    text: 'Всё, что сделано с добрым сердцем, обязательно найдёт дорогу обратно.',
+    type: 'настроение',
+    category: 'objects',
+  },
+
   // Редкие карты — пониженный шанс выпадения.
   {
     id: 'forest-house',
@@ -284,13 +354,37 @@ export const dayCards: DayCard[] = [
     category: 'sabbats',
     rare: true,
   },
+
+  // Легендарные карты — самый редкий тип, вдвое реже редких.
+  {
+    id: 'legendary-dragon',
+    card_id: 'card-101',
+    name: 'Дракон',
+    text: 'Истинная сила никогда не нуждается в доказательствах.',
+    type: 'настроение',
+    category: 'animals',
+    legendary: true,
+  },
+  {
+    id: 'timekeeper',
+    card_id: 'card-102',
+    name: 'Хранитель времени',
+    text: 'Всему приходит своё совершенное время.',
+    type: 'настроение',
+    category: 'objects',
+    legendary: true,
+  },
 ];
 
-// Взвешенный пул: обычная карта встречается в RARE_WEIGHT раз чаще редкой.
-const RARE_WEIGHT = 10;
-const weightedCards: DayCard[] = dayCards.flatMap((c) =>
-  Array<DayCard>(c.rare ? 1 : RARE_WEIGHT).fill(c),
-);
+// Взвешенный пул по редкости: обычная : редкая : легендарная = 20 : 2 : 1.
+// Так редкая выпадает в 10 раз реже обычной, а легендарная — вдвое реже редкой.
+const NORMAL_WEIGHT = 20;
+const RARE_WEIGHT = 2;
+const LEGENDARY_WEIGHT = 1;
+const weightedCards: DayCard[] = dayCards
+  // Подарочная карта не участвует в обычном рандоме — только через праздничную ветку.
+  .filter((c) => c.id !== 'birthday-forest')
+  .flatMap((c) => Array<DayCard>(c.legendary ? LEGENDARY_WEIGHT : c.rare ? RARE_WEIGHT : NORMAL_WEIGHT).fill(c));
 
 // Хеш с лавинообразным финализатором: соседние ключи (соседние дни) расходятся
 // далеко по колоде — иначе из-за блоков одинаковых карт в weightedCards одна и
@@ -325,7 +419,9 @@ export function cardForDate(date?: Date): DayCard {
 
   const now = new Date();
   const today = isoDate(now);
-  if (readStore<string>('userIdentity', '') === 'green') {
+  // Подарочная карта — только в сам день рождения, только зелёной ведьме и только
+  // по подарочному коду. В остальные дни (в т.ч. на следующий) — обычный рандом.
+  if (today === BIRTHDAY_CARD_DATE && isGiftUnlocked() && readStore<string>('userIdentity', '') === 'green') {
     const birthday = cardById('birthday-forest');
     if (birthday) {
       writeStore('dailyCard', { date: today, id: birthday.id });
@@ -334,7 +430,9 @@ export function cardForDate(date?: Date): DayCard {
   }
 
   const stored = readStore<{ date: string; id: string } | null>('dailyCard', null);
-  if (stored && stored.date === today) {
+  // Не переиспользуем закреплённую подарочную карту в другие дни: если её записали
+  // раньше (например, из-за старой логики), в не-праздничный день берём обычную.
+  if (stored && stored.date === today && stored.id !== 'birthday-forest') {
     const fixed = cardById(stored.id);
     if (fixed) return fixed;
   }

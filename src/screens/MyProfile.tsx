@@ -10,6 +10,7 @@ import { activeFamiliars, befriendedDragons, defaultPathState, familiarBondLabel
 import { identityFor, craftGiftsFor, craftTier, craftTierLabel } from '../data/identities';
 import { familiarById, familiarAffinity, trinketById, trinkets as allTrinkets, dragonById, dragonOaths, forestKeeper } from '../data/path';
 import { birthdayArt, familiarArtById, familiarIconById, pathArtFor } from '../assets';
+import { isGiftUnlocked } from '../lib/giftUnlock';
 import { formatShortDate } from '../lib/date';
 
 // Куда ведёт перенятое ремесло — подпись «родного» раздела.
@@ -57,7 +58,8 @@ export function MyProfile() {
   const identity = identityFor(readStore<string>('userIdentity', ''));
   const userName = readStore<string>('userName', '');
   const userAvatar = readStore<string>('userAvatar', '');
-  const birthdayTitle = readStore<string>('birthdayGiftTitle', '');
+  // Подарочные блоки (искры + личное созвездие) — только по подарочному коду.
+  const birthdayTitle = isGiftUnlocked() ? readStore<string>('birthdayGiftTitle', '') : '';
   const birthdaySparks = readStore<number>('birthdayGiftSparks', 0);
   const companions = activeFamiliars(path);
   const dragonFriends = befriendedDragons(path);

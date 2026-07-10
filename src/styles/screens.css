@@ -1209,6 +1209,122 @@
   font-size: 1.2rem;
   line-height: 1;
 }
+.path-quests {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: linear-gradient(160deg, rgba(26, 20, 34, 0.72), rgba(34, 28, 46, 0.62));
+  border: 1px solid color-mix(in srgb, var(--path-accent, var(--gold-soft)) 30%, transparent);
+}
+.path-quests__head {
+  font-size: 0.78rem;
+  color: var(--path-accent, var(--gold-soft));
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.path-quest {
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--path-accent, var(--gold-soft)) 16%, transparent);
+  background: color-mix(in srgb, var(--path-accent, var(--gold-soft)) 6%, rgba(20, 16, 28, 0.5));
+}
+.path-quest + .path-quest { margin-top: 6px; }
+.path-quest.is-due {
+  border-color: color-mix(in srgb, var(--gold-soft) 60%, transparent);
+  background: color-mix(in srgb, var(--gold-soft) 12%, rgba(20, 16, 28, 0.6));
+}
+.path-quest__glyph { font-size: 1.15rem; flex: 0 0 auto; }
+.path-quest__body { flex: 1 1 auto; min-width: 0; }
+.path-quest__body strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.94rem;
+  color: var(--text);
+  line-height: 1.15;
+}
+.path-quest__body strong em {
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-faint);
+}
+.path-quest__body span {
+  display: block;
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  line-height: 1.35;
+  margin-top: 2px;
+}
+.path-quest__status {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.7rem;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--text-faint);
+}
+.path-quest.is-due .path-quest__status { color: var(--gold-soft); font-style: normal; }
+
+.path-relics {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: linear-gradient(160deg, rgba(15, 26, 20, 0.72), rgba(28, 46, 34, 0.62));
+  border: 1px solid color-mix(in srgb, var(--path-accent, var(--gold-soft)) 24%, transparent);
+}
+.path-relics__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 0.78rem;
+  color: var(--text-faint);
+}
+.path-relics__head span { color: var(--path-accent, var(--gold-soft)); font-weight: 700; }
+.path-relics__head em { font-style: normal; }
+.path-relics__list {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+.path-relic {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--path-accent, var(--gold-soft)) 18%, transparent);
+  background: color-mix(in srgb, var(--path-accent, var(--gold-soft)) 6%, rgba(15, 26, 20, 0.5));
+}
+.path-relic.is-ready {
+  border-color: color-mix(in srgb, var(--gold-soft) 60%, transparent);
+  background: color-mix(in srgb, var(--gold-soft) 14%, rgba(15, 26, 20, 0.6));
+}
+.path-relic.is-claimed { opacity: 0.72; }
+.path-relic__glyph { font-size: 1.15rem; flex: 0 0 auto; }
+.path-relic__body { flex: 1 1 auto; min-width: 0; }
+.path-relic__body strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+  color: var(--text);
+  line-height: 1.1;
+}
+.path-relic__body em {
+  display: block;
+  font-style: normal;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+.path-relic__pips { display: inline-flex; gap: 2px; flex: 0 0 auto; }
+.path-relic__pips b { font-size: 0.86rem; opacity: 0.3; filter: grayscale(1); }
+.path-relic__pips b.is-on { opacity: 1; filter: none; }
+.path-relic__done { color: var(--gold-soft); font-weight: 700; flex: 0 0 auto; }
+.path-relic__claim { flex: 0 0 auto; cursor: pointer; }
+
 .path-magic-strip {
   display: flex;
   gap: 8px;
@@ -2582,6 +2698,13 @@
 .familiar-nudge--care .familiar-nudge__glyph {
   background: rgba(185, 196, 216, 0.13);
 }
+.familiar-nudge--dragon {
+  border-color: rgba(182, 154, 216, 0.34);
+  background: linear-gradient(160deg, rgba(26, 20, 34, 0.7), rgba(34, 26, 40, 0.56));
+}
+.familiar-nudge--dragon .familiar-nudge__glyph {
+  background: rgba(182, 154, 216, 0.16);
+}
 .familiar-nudge__title {
   color: var(--gold-soft);
   font-family: var(--font-display);
@@ -2617,6 +2740,9 @@
   margin-bottom: 10px;
 }
 .familiar-home-sheet--care {
+  margin-bottom: 14px;
+}
+.familiar-home-sheet--dragon {
   margin-bottom: 14px;
 }
 .familiar-gift-card {

@@ -11,11 +11,11 @@ import { cardArtById, pathArtFor, runeArtById } from '../assets';
 import { readStore, useLocalStorage } from '../storage/useLocalStorage';
 import { identityFor, blendedPathWhisper } from '../data/identities';
 import {
-  commitFamiliarCare, commitFamiliarGift, commitFamiliarNudge,
-  defaultPathState, deriveFamiliarCare, deriveFamiliarGift, deriveFamiliarNudge,
-  stepsLeftToday, type FamiliarCare, type FamiliarInteractionChoice,
+  commitFamiliarCare, commitFamiliarGift, commitFamiliarNudge, commitDragonVisit,
+  defaultPathState, deriveFamiliarCare, deriveFamiliarGift, deriveFamiliarNudge, deriveDragonVisit,
+  stepsLeftToday, type FamiliarCare, type FamiliarInteractionChoice, type DragonInteractionChoice,
 } from '../lib/path';
-import { familiarById, trinketById } from '../data/path';
+import { familiarById, trinketById, dragonById } from '../data/path';
 import type { PathState } from '../storage/types';
 import { PATH_ENABLED } from '../config';
 
@@ -75,6 +75,9 @@ export function Home() {
   const familiarNudge = PATH_ENABLED ? deriveFamiliarNudge(path, identity.id, today) : null;
   const familiarGift = PATH_ENABLED && !familiarNudge ? deriveFamiliarGift(path, identity.id, today) : null;
   const familiarCare = PATH_ENABLED && !familiarNudge && !familiarGift ? deriveFamiliarCare(path, identity.id, today) : null;
+  // Визит дракона-друга — показываем, только когда никакой карточки фамильяра нет (не сорить на Главной).
+  const dragonVisit = PATH_ENABLED && !familiarNudge && !familiarGift && !familiarCare ? deriveDragonVisit(path, identity.id, today) : null;
+  const visitDragon = dragonById(dragonVisit?.dragonId);
   const nudgeFamiliar = familiarById(familiarNudge?.familiarId);
   const giftFamiliar = familiarById(familiarGift?.familiarId);
   const giftTrinket = familiarGift ? trinketById(familiarGift.trinketId) : undefined;
@@ -85,6 +88,8 @@ export function Home() {
   const [giftOutcome, setGiftOutcome] = useState('');
   const [careSheet, setCareSheet] = useState(false);
   const [careOutcome, setCareOutcome] = useState<{ text: string; art?: string } | null>(null);
+  const [dragonSheet, setDragonSheet] = useState(false);
+  const [dragonOutcome, setDragonOutcome] = useState('');
 
   // Настраиваемые тропинки: пользователь выбирает страницы и их порядок.
   const [homeLinks, setHomeLinks] = useLocalStorage<string[]>('homeLinks', DEFAULT_HOME_LINKS);
@@ -129,6 +134,13 @@ export function Home() {
           ? `${choice.outcome} Связь стала неразлучной: теперь может появиться второй спутник.`
           : choice.outcome,
     );
+  }
+
+  function answerDragon(choice: DragonInteractionChoice) {
+    if (!dragonVisit) return;
+    const res = commitDragonVisit(path, dragonVisit, choice, identity.id, today);
+    setPath(res.state);
+    setDragonOutcome(res.note ? `${choice.outcome} ${res.note}` : choice.outcome);
   }
 
   function acceptFamiliarGift() {
@@ -307,6 +319,18 @@ export function Home() {
           </button>
         )}
 
+        {PATH_ENABLED && dragonVisit && visitDragon && (
+          <button className="familiar-nudge familiar-nudge--dragon rise" onClick={() => { setDragonOutcome(''); setDragonSheet(true); }}>
+            <span className="familiar-nudge__glyph">{visitDragon.glyph}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="eyebrow">Дракон-друг рядом</div>
+              <div className="familiar-nudge__title">{dragonVisit.title}</div>
+              <div className="familiar-nudge__hint">{visitDragon.name} прилетел к тебе</div>
+            </div>
+            <span className="faint" style={{ fontSize: '1.2rem' }}>→</span>
+          </button>
+        )}
+
         {PATH_ENABLED && (
           <Link to="/profile" className="profile-link rise">
             <span className="profile-link__avatar">
@@ -464,6 +488,34 @@ export function Home() {
               {familiarCare.actions.map((action) => (
                 <button key={action.text} className="choice" onClick={() => answerFamiliarCare(action)}>
                   {action.text}
+                </button>
+              ))}
+            </div>
+          )}
+        </Sheet>
+      )}
+
+      {dragonSheet && dragonVisit && visitDragon && (
+        <Sheet title={dragonVisit.title} onClose={() => setDragonSheet(false)}>
+          <img className="sheet-art" src={pathArtFor(dragonVisit.art)} alt="" />
+          <div className="familiar-home-sheet familiar-home-sheet--dragon">
+            <span className="familiar-home-sheet__glyph">{visitDragon.glyph}</span>
+            <div>
+              <div className="eyebrow">{visitDragon.name}</div>
+              <p>{dragonVisit.text}</p>
+            </div>
+          </div>
+
+          {dragonOutcome ? (
+            <>
+              <p className="path-result">{dragonOutcome}</p>
+              <button className="btn btn--primary btn--block" onClick={() => setDragonSheet(false)}>Готово</button>
+            </>
+          ) : (
+            <div className="stack stack--tight">
+              {dragonVisit.choices.map((choice) => (
+                <button key={choice.text} className="choice" onClick={() => answerDragon(choice)}>
+                  {choice.text}
                 </button>
               ))}
             </div>

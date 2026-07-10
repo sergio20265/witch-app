@@ -8,7 +8,8 @@ import type { PathState } from '../storage/types';
 import {
   defaultPathState, deriveStep, stepsLeftToday, pathStepPace, pathDevelopmentSummary,
   activeFamiliars, commitQuiet, commitFamiliar, commitEncounter, commitCrossroad, commitDragon, commitDragonInteraction, commitFamiliarInteraction, commitForestAttention,
-  commitKeeper, commitKeeperInteraction,
+  commitKeeper, commitKeeperInteraction, commitWanderer, commitClaimRelic,
+  commitQuestChoice, questStageChoices, activeQuestSummaries,
   forestAttentionHint, forestAttentionLabel, forestAttentionLevel, commitMagicChallenge, availablePathSpells,
   hasUnlockedCraft, maxFamiliarSlots,
   type PathStep,
@@ -16,6 +17,8 @@ import {
 import { crossroadFlavor, type PathBranch, type PathEvent, type PathNode } from '../data/pathEvents';
 import { identityFor } from '../data/identities';
 import { familiarById, trinketById, dragonById, forestKeeper } from '../data/path';
+import { wandererById } from '../data/pathWanderers';
+import { relicSetStatuses } from '../data/relicSets';
 import { pathArtFor, pathVideoFor, familiarArtById, familiarIconById } from '../assets';
 import { shareCard } from '../lib/shareCard';
 import { todayISO } from '../lib/date';
@@ -41,6 +44,9 @@ export function MyPath() {
   const attentionLabel = forestAttentionLabel(state);
   const attentionHint = forestAttentionHint(state);
   const development = pathDevelopmentSummary(state, identity.id, today);
+  const relics = relicSetStatuses(state.trinkets, state.claimedRelicSets ?? []);
+  const startedRelics = relics.filter((r) => r.owned > 0 || r.claimed);
+  const quests = activeQuestSummaries(state);
 
   // Прохождение события: текущий узел + накопленные эффекты ветки.
   const [node, setNode] = useState<string | null>(null);
@@ -49,7 +55,7 @@ export function MyPath() {
   const [accAttention, setAccAttention] = useState(0);
   const [accBonusSteps, setAccBonusSteps] = useState(0);
   // Итоговая карточка после совершённого шага.
-  const [result, setResult] = useState<{ outcome: string; learned: string[]; found?: string; note?: string } | null>(null);
+  const [result, setResult] = useState<{ outcome: string; learned: string[]; found?: string; note?: string; art?: string; artTitle?: string } | null>(null);
   const [lightbox, setLightbox] = useState<{ src: string; title: string } | null>(null);
 
   function resetEncounter() {
@@ -90,6 +96,11 @@ export function MyPath() {
       name = forestKeeper.name; text = forestKeeper.blurb;
     } else if (step.kind === 'keeperEvent') {
       name = step.interaction.title; text = `${forestKeeper.name}: ${step.interaction.text}`;
+    } else if (step.kind === 'wanderer') {
+      const w = wandererById(step.interaction.wandererId);
+      name = step.interaction.title; text = `${w?.name ?? 'Странник'}: ${step.interaction.text}`;
+    } else if (step.kind === 'quest') {
+      name = step.stage.title; text = step.stage.text;
     } else if (step.kind === 'crossroad') {
       name = 'Перекрёсток путей'; text = crossroadFlavor[step.targetId] ?? '';
     }
@@ -181,6 +192,38 @@ export function MyPath() {
     setResult({ outcome: choice.outcome, learned: res.learned, note: res.note });
   }
 
+  function chooseWanderer(choiceIndex: number) {
+    if (step.kind !== 'wanderer') return;
+    const choice = step.interaction.choices[choiceIndex];
+    const res = commitWanderer(state, step.interaction, choice, identity.id, today);
+    setState(res.state);
+    setResult({ outcome: choice.outcome, learned: res.learned, found: res.found, note: res.note });
+  }
+
+  function claimRelic(setId: string) {
+    const res = commitClaimRelic(state, setId, today);
+    setState(res.state);
+    const set = relics.find((r) => r.set.id === setId)?.set;
+    setResult({ outcome: res.outcome, learned: [], note: res.note, art: set?.art ? pathArtFor(set.art) : undefined, artTitle: set?.name });
+  }
+
+  function chooseQuest(choiceIndex: number) {
+    if (step.kind !== 'quest') return;
+    const choices = questStageChoices(state, step.stage, identity.id);
+    const choice = choices[choiceIndex];
+    const res = commitQuestChoice(state, { quest: step.quest, stageIndex: step.stageIndex, stage: step.stage, isStart: step.isStart }, choice, identity.id, today);
+    setState(res.state);
+    const stageArt = step.stage.art ?? step.quest.art;
+    setResult({
+      outcome: choice.outcome,
+      learned: res.learned,
+      found: res.found,
+      note: res.note,
+      art: res.questCompleted && stageArt ? pathArtFor(stageArt) : undefined,
+      artTitle: res.questCompleted ? step.quest.name : undefined,
+    });
+  }
+
   function chooseCrossroad(targetId: string, accept: boolean) {
     setState(commitCrossroad(state, targetId, accept, today, identity.id));
     if (accept) writeStore('userIdentity', targetId);
@@ -254,6 +297,60 @@ export function MyPath() {
           </div>
         </div>
 
+        {quests.length > 0 && (
+          <div className="path-quests rise" aria-label="Странствие">
+            <div className="path-quests__head">
+              <span>Странствие</span>
+            </div>
+            {quests.map((q) => (
+              <div key={q.id} className={`path-quest${q.due ? ' is-due' : ''}`}>
+                <span className="path-quest__glyph" aria-hidden>{q.glyph}</span>
+                <div className="path-quest__body">
+                  <strong>{q.name} <em>стадия {q.stage}/{q.total}</em></strong>
+                  <span>{q.hint}</span>
+                  <b className="path-quest__status">
+                    {q.due ? 'путь готов вывести навстречу' : q.stepsUntil === 1 ? 'ещё шаг до продолжения' : `ещё ${q.stepsUntil} шага до продолжения`}
+                  </b>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="path-relics rise" aria-label="Реликварий">
+          <div className="path-relics__head">
+            <span>Реликварий</span>
+            <em>{relics.filter((r) => r.claimed).length}/{relics.length} собрано</em>
+          </div>
+          <div className="path-relics__list">
+            {relics.map((r) => (
+              <div key={r.set.id} className={`path-relic${r.claimed ? ' is-claimed' : ''}${r.claimable ? ' is-ready' : ''}`}>
+                <span className="path-relic__glyph" aria-hidden>{r.set.glyph}</span>
+                <div className="path-relic__body">
+                  <strong>{r.set.name}</strong>
+                  <em title={r.set.hint}>{r.claimed ? r.set.title : `${r.owned}/${r.total}`}</em>
+                </div>
+                {r.claimable
+                  ? <button className="chip path-relic__claim" onClick={() => claimRelic(r.set.id)}>Собрать</button>
+                  : r.claimed
+                    ? <span className="path-relic__done" aria-hidden>✓</span>
+                    : (
+                      <span className="path-relic__pips" aria-hidden>
+                        {r.set.trinkets.map((id) => (
+                          <b key={id} className={state.trinkets.includes(id) ? 'is-on' : ''}>{trinketById(id)?.glyph ?? '·'}</b>
+                        ))}
+                      </span>
+                    )}
+              </div>
+            ))}
+          </div>
+          {startedRelics.length === 0 && (
+            <p className="faint" style={{ fontSize: '0.74rem', margin: '6px 0 0' }}>
+              Собирай находки на тропе — набор целиком дарит боон и звание.
+            </p>
+          )}
+        </div>
+
         {availablePathSpells(state, identity.id).length > 0 && (
           <div className="path-magic-strip rise" aria-label="Доступная магия на тропе">
             {availablePathSpells(state, identity.id).slice(0, 5).map((spell) => (
@@ -267,6 +364,11 @@ export function MyPath() {
 
         {result ? (
           <div className="path-card rise">
+            {result.art && (
+              <button className="image-preview image-preview--block" type="button" onClick={() => setLightbox({ src: result.art!, title: result.artTitle ?? 'Набор собран' })} aria-label={`Open image: ${result.artTitle ?? 'relic set'}`}>
+                <img className="path-found-art" src={result.art} alt="" />
+              </button>
+            )}
             <p className="path-outcome">{result.outcome}</p>
             {result.found && trinketById(result.found) && (
               <>
@@ -516,6 +618,59 @@ export function MyPath() {
               );
             })()}
 
+            {step.kind === 'wanderer' && (() => {
+              const w = wandererById(step.interaction.wandererId)!;
+              const wandererArt = pathArtFor(w.art);
+              return (
+                <div className="path-card rise">
+                  <div className="eyebrow">Встреча на тропе</div>
+                  <div className="path-familiar">
+                    <button className="image-preview path-familiar__preview" type="button" onClick={() => setLightbox({ src: wandererArt, title: w.name })} aria-label={`Open image: ${w.name}`}>
+                      <img className="path-familiar__icon path-familiar__icon--cover" src={wandererArt} alt={w.name} />
+                    </button>
+                    <div>
+                      <h3 style={{ margin: 0 }}>{w.name}</h3>
+                      <p className="muted" style={{ margin: '4px 0 0' }}>{w.blurb}</p>
+                    </div>
+                  </div>
+                  <p className="path-scene-text">{step.interaction.text}</p>
+                  <div className="stack stack--tight">
+                    {step.interaction.choices.map((choice, i) => (
+                      <button key={i} className="path-choice" onClick={() => chooseWanderer(i)}>
+                        {choice.text}
+                        {choice.grantTrinket && trinketById(choice.grantTrinket) && (
+                          <em>{trinketById(choice.grantTrinket)!.glyph} {trinketById(choice.grantTrinket)!.name}</em>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {step.kind === 'quest' && (() => {
+              const choices = questStageChoices(state, step.stage, identity.id);
+              return (
+                <div className="path-card rise">
+                  <div className="eyebrow">
+                    {step.quest.glyph} {step.quest.name} · {step.isStart ? 'завязка' : `стадия ${step.stageIndex + 1}/${step.quest.stages.length}`}
+                  </div>
+                  <h3 style={{ margin: '2px 0 6px' }}>{step.stage.title}</h3>
+                  <p className="path-scene-text">{step.stage.text}</p>
+                  <div className="stack stack--tight">
+                    {choices.map((choice, i) => (
+                      <button key={i} className="path-choice" onClick={() => chooseQuest(i)}>
+                        {choice.text}
+                        {choice.grantTrinket && trinketById(choice.grantTrinket) && (
+                          <em>{trinketById(choice.grantTrinket)!.glyph} {trinketById(choice.grantTrinket)!.name}</em>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             {step.kind === 'crossroad' && (
               <div className="path-card rise">
                 <div className="eyebrow">Перекрёсток путей</div>
@@ -579,6 +734,8 @@ function lightboxTitle(step: PathStep): string {
   if (step.kind === 'dragon') return dragonById(step.dragonId)?.name ?? 'Dragon';
   if (step.kind === 'keeper') return forestKeeper.name;
   if (step.kind === 'keeperEvent') return step.interaction?.title ?? forestKeeper.name;
+  if (step.kind === 'wanderer') return step.interaction?.title ?? wandererById(step.interaction?.wandererId)?.name ?? 'Wanderer';
+  if (step.kind === 'quest') return step.stage?.title ?? step.quest?.name ?? 'Quest';
   if (step.kind === 'crossroad') return 'Crossroad';
   if (step.kind === 'attention') return 'Path attention';
   if (step.kind === 'magic' && step.challenge) return step.challenge.title;
@@ -629,6 +786,8 @@ function stepArtUrl(step: PathStep, identityId: string, state: PathState): strin
   if (step.kind === 'dragonEvent' && step.interaction) return pathArtFor(dragonById(step.interaction.dragonId)?.art ?? 'path-dragon');
   if (step.kind === 'dragon') return pathArtFor(dragonById(step.dragonId)?.art ?? 'path-dragon');
   if (step.kind === 'keeper' || step.kind === 'keeperEvent') return pathArtFor(forestKeeper.art);
+  if (step.kind === 'wanderer') return pathArtFor(wandererById(step.interaction.wandererId)?.art ?? 'path-quiet');
+  if (step.kind === 'quest') return pathArtFor(step.stage.art ?? step.quest.art ?? 'path-quiet');
   if (step.kind === 'crossroad') return pathArtFor('event-crossroads');
   if (step.kind === 'attention') return pathArtFor('event-path-attention');
   if (step.kind === 'magic' && step.challenge) return pathArtFor(step.challenge.art);

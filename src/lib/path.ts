@@ -9,9 +9,12 @@ import { pathEvents, quietLinesFor, type PathEvent } from '../data/pathEvents';
 import {
   STEPS_PER_DAY, STEPS_PER_WINDOW, SKILL_THRESHOLD, CROSSROAD_THRESHOLD,
   FAMILIAR_BOND_MIN, FAMILIAR_BOND_MAX, SECOND_FAMILIAR_BOND,
-  familiars, familiarAffinity, trinkets, dragons, forestKeeper,
+  familiars, familiarAffinity, trinkets, dragons, dragonById, forestKeeper,
 } from '../data/path';
 import { identityFor } from '../data/identities';
+import { wanderers, wandererById, type Wanderer, type WandererChoice } from '../data/pathWanderers';
+import { relicSetById, relicSetStatuses } from '../data/relicSets';
+import { pathQuests, questById, type PathQuest, type QuestChoice, type QuestStage } from '../data/pathQuests';
 import type { PathState, PathLogEntry, PathFamiliarState, PathAltarKind, PathPotionEffect, PathDevelopmentState } from '../storage/types';
 
 export function defaultPathState(): PathState {
@@ -45,6 +48,16 @@ const DRAGON_EVENT_CHANCE = 10;
 const KEEPER_MIN_GREEN_AFFINITY = 3;
 const KEEPER_BASE_CHANCE = 4;
 const KEEPER_EVENT_CHANCE = 12;
+/** Базовый шанс встретить странника (в процентах за шаг), вне кулдауна. */
+const WANDERER_CHANCE = 8;
+/** Сколько шагов странники не выходят навстречу после разговора. */
+const WANDERER_COOLDOWN = 8;
+/** Шанс наткнуться на завязку нового квеста (когда активного нет). */
+const QUEST_START_CHANCE = 11;
+/** Сколько шагов не предлагать квест после отказа от завязки. */
+const QUEST_DECLINE_COOLDOWN = 12;
+/** По умолчанию: через сколько шагов следующая стадия квеста выходит навстречу. */
+const QUEST_STAGE_DELAY = 2;
 const MAX_FOREST_ATTENTION = 6;
 
 export function forestAttentionLevel(state: PathState): number {
@@ -528,6 +541,7 @@ export interface DragonInteractionChoice {
   affinity?: Record<string, number>;
   attention?: number;
   bonusSteps?: number;
+  grantTrinket?: string;   // редкая находка «с высоты» (визиты драконов на Главную)
 }
 
 export interface DragonInteraction {
@@ -959,6 +973,414 @@ function deriveKeeperInteraction(state: PathState, identityId: string, seed: num
   if (!hasKeeperFriend(state)) return null;
   const template = keeperInteractionTemplates[hash(`keeper-event-${seed}-${state.step}`) % keeperInteractionTemplates.length];
   return { title: template.title, text: template.text, choices: template.choices(identityId) };
+}
+
+export interface WandererInteraction {
+  wandererId: string;
+  title: string;
+  text: string;
+  choices: WandererChoice[];
+}
+
+function wandererOnCooldown(state: PathState): boolean {
+  return state.wandererCooldownUntil != null && state.step < state.wandererCooldownUntil;
+}
+
+/** Шанс встретить странника: 0 на кулдауне, иначе базовый + лёгкая надбавка от внимания пути. */
+function wandererChance(state: PathState): number {
+  if (wandererOnCooldown(state)) return 0;
+  return Math.min(14, WANDERER_CHANCE + Math.floor(forestAttentionLevel(state) / 3));
+}
+
+function deriveWanderer(state: PathState, seed: number): WandererInteraction | null {
+  if (wandererOnCooldown(state)) return null;
+  const wanderer: Wanderer = wanderers[hash(`wanderer-who-${seed}-${state.step}`) % wanderers.length];
+  if (wanderer.scenes.length === 0) return null;
+  const scene = wanderer.scenes[hash(`wanderer-scene-${seed}-${state.step}`) % wanderer.scenes.length];
+  // Бартерные выборы показываем только когда нужная вещь уже в котомке.
+  const owned = new Set(state.trinkets);
+  const choices = scene.choices.filter((c) => !c.requiresTrinket || owned.has(c.requiresTrinket));
+  if (choices.length === 0) return null;
+  return { wandererId: wanderer.id, title: scene.title, text: scene.text, choices };
+}
+
+export function commitWanderer(
+  state: PathState,
+  interaction: WandererInteraction,
+  choice: WandererChoice,
+  identityId: string,
+  today: string,
+): { state: PathState; learned: string[]; found?: string; note?: string } {
+  const grantId = choice.grantTrinket && !state.trinkets.includes(choice.grantTrinket) ? choice.grantTrinket : undefined;
+  const s = shiftForestAttention(
+    bumpStep(state, today, identityId),
+    softenAttentionDelta(state, (choice.attention ?? 0) + encounterAttentionDelta(identityId, choice.affinity ?? {}, grantId ? [grantId] : [])),
+  );
+
+  const affinity = { ...s.affinity };
+  for (const [k, v] of Object.entries(choice.affinity ?? {})) affinity[k] = (affinity[k] || 0) + v;
+
+  const skills = [...s.skills];
+  const learned: string[] = [];
+  for (const [id, v] of Object.entries(affinity)) {
+    if (id !== identityId && v >= SKILL_THRESHOLD && !skills.includes(id)) {
+      skills.push(id);
+      learned.push(id);
+    }
+  }
+
+  const trinkets = grantId ? [...s.trinkets, grantId] : s.trinkets;
+  const met = new Set(s.metWanderers ?? []);
+  met.add(interaction.wandererId);
+  const bonusSteps = (s.bonusSteps ?? 0) + (choice.bonusSteps ?? 0);
+  const log = pushLog(s, { date: today, eventId: 'wanderer-' + interaction.wandererId, choice: choice.text, outcome: choice.outcome });
+
+  return {
+    state: {
+      ...s,
+      affinity,
+      skills,
+      trinkets,
+      log,
+      metWanderers: [...met],
+      wandererCooldownUntil: s.step + WANDERER_COOLDOWN,
+      bonusSteps: bonusSteps > 0 ? bonusSteps : s.bonusSteps,
+    },
+    learned,
+    found: grantId,
+    note: choice.bonusSteps ? `${wandererById(interaction.wandererId)?.name ?? 'Странник'} открыл ещё один шаг в дорогу.` : undefined,
+  };
+}
+
+/** Собранные наборы находок, чей боон ещё можно забрать. */
+export function claimableRelicSets(state: PathState): string[] {
+  return relicSetStatuses(state.trinkets, state.claimedRelicSets ?? [])
+    .filter((s) => s.claimable)
+    .map((s) => s.set.id);
+}
+
+export function commitClaimRelic(
+  state: PathState,
+  setId: string,
+  today: string,
+): { state: PathState; outcome: string; note?: string } {
+  const set = relicSetById(setId);
+  const already = (state.claimedRelicSets ?? []).includes(setId);
+  const complete = set ? set.trinkets.every((id) => state.trinkets.includes(id)) : false;
+  if (!set || already || !complete) {
+    return { state, outcome: 'Набор ещё не собран целиком.' };
+  }
+  const claimedRelicSets = [...(state.claimedRelicSets ?? []), setId];
+  const bonusSteps = (state.bonusSteps ?? 0) + (set.reward.bonusSteps ?? 0);
+  const withAttention = shiftForestAttention({ ...state, claimedRelicSets, bonusSteps }, set.reward.attention ?? 0);
+  const log = pushLog(withAttention, { date: today, eventId: 'relic-' + setId, choice: 'Собрать набор', outcome: set.claimText });
+  const rewardParts: string[] = [];
+  if (set.reward.bonusSteps) rewardParts.push(`бонусных шагов: ${set.reward.bonusSteps}`);
+  if (set.reward.attention && set.reward.attention < 0) rewardParts.push('внимание пути стихло');
+  return {
+    state: { ...withAttention, log },
+    outcome: set.claimText,
+    note: `Звание: ${set.title}${rewardParts.length ? ' · ' + rewardParts.join(' · ') : ''}.`,
+  };
+}
+
+// ===== Многошаговые мини-квесты =====
+
+function activeQuests(state: PathState): import('../storage/types').PathQuestState[] {
+  return (state.quests ?? []).filter((q) => !q.done);
+}
+
+export function hasActiveQuest(state: PathState): boolean {
+  return activeQuests(state).length > 0;
+}
+
+export interface ActiveQuestSummary {
+  id: string;
+  name: string;
+  glyph: string;
+  hint: string;
+  stage: number;         // 1-based номер текущей стадии
+  total: number;
+  due: boolean;          // стадия уже вышла навстречу
+  stepsUntil: number;    // сколько шагов до появления стадии (0 — уже готова)
+}
+
+/** Краткая сводка по активным квестам — для журнала странствия на экране тропы. */
+export function activeQuestSummaries(state: PathState): ActiveQuestSummary[] {
+  const out: ActiveQuestSummary[] = [];
+  for (const qs of activeQuests(state)) {
+    const quest = questById(qs.id);
+    if (!quest || !quest.stages[qs.stage]) continue;
+    out.push({
+      id: quest.id,
+      name: quest.name,
+      glyph: quest.glyph,
+      hint: quest.hint,
+      stage: qs.stage + 1,
+      total: quest.stages.length,
+      due: state.step >= qs.nextStepAt,
+      stepsUntil: Math.max(0, qs.nextStepAt - state.step),
+    });
+  }
+  return out;
+}
+
+function questEligibleToStart(state: PathState, quest: PathQuest, identityId: string): boolean {
+  if (quest.tracks && !quest.tracks.includes('*') && !quest.tracks.includes(identityId)) return false;
+  if (quest.requireIdentity && !quest.requireIdentity.includes(identityId)) return false;
+  if (quest.minStep != null && state.step < quest.minStep) return false;
+  if (quest.minAffinity && (state.affinity[quest.minAffinity.id] ?? 0) < quest.minAffinity.value) return false;
+  // Уже начатый или пройденный квест повторно не предлагаем.
+  return !(state.quests ?? []).some((q) => q.id === quest.id);
+}
+
+/** Активная стадия квеста, что уже вышла навстречу (готова к прохождению). */
+function deriveActiveQuestStage(state: PathState): { quest: PathQuest; stageIndex: number; stage: QuestStage } | null {
+  for (const qs of activeQuests(state)) {
+    if (state.step < qs.nextStepAt) continue;
+    const quest = questById(qs.id);
+    const stage = quest?.stages[qs.stage];
+    if (quest && stage) return { quest, stageIndex: qs.stage, stage };
+  }
+  return null;
+}
+
+/** Завязка нового квеста (когда активного нет и кулдаун прошёл). */
+function deriveQuestStart(state: PathState, identityId: string, seed: number): { quest: PathQuest; stage: QuestStage } | null {
+  if (hasActiveQuest(state)) return null;
+  if (state.questCooldownUntil != null && state.step < state.questCooldownUntil) return null;
+  const pool = pathQuests.filter((q) => questEligibleToStart(state, q, identityId));
+  if (pool.length === 0) return null;
+  const quest = pool[hash(`quest-which-${seed}-${state.step}`) % pool.length];
+  return { quest, stage: quest.stages[0] };
+}
+
+export interface QuestStepInfo {
+  quest: PathQuest;
+  stageIndex: number;
+  stage: QuestStage;
+  isStart: boolean;
+}
+
+/** Доступные (не заблокированные памятью или ремеслом) выборы стадии. */
+export function questStageChoices(state: PathState, stage: QuestStage, identityId: string): QuestChoice[] {
+  const owned = new Set(state.trinkets);
+  return stage.choices.filter((c) => {
+    if (c.requiresTrinket && !owned.has(c.requiresTrinket)) return false;
+    if (c.requiresSkill && !hasUnlockedCraft(state, identityId, c.requiresSkill)) return false;
+    return true;
+  });
+}
+
+export function commitQuestChoice(
+  state: PathState,
+  info: QuestStepInfo,
+  choice: QuestChoice,
+  identityId: string,
+  today: string,
+): { state: PathState; learned: string[]; found?: string; note?: string; questCompleted?: boolean; questDeclined?: boolean } {
+  const grantId = choice.grantTrinket && !state.trinkets.includes(choice.grantTrinket) ? choice.grantTrinket : undefined;
+  const s = shiftForestAttention(
+    bumpStep(state, today, identityId),
+    softenAttentionDelta(state, (choice.attention ?? 0) + encounterAttentionDelta(identityId, choice.affinity ?? {}, grantId ? [grantId] : [])),
+  );
+
+  const affinity = { ...s.affinity };
+  for (const [k, v] of Object.entries(choice.affinity ?? {})) affinity[k] = (affinity[k] || 0) + v;
+
+  const skills = [...s.skills];
+  const learned: string[] = [];
+  for (const [id, v] of Object.entries(affinity)) {
+    if (id !== identityId && v >= SKILL_THRESHOLD && !skills.includes(id)) {
+      skills.push(id);
+      learned.push(id);
+    }
+  }
+
+  const trinkets = grantId ? [...s.trinkets, grantId] : s.trinkets;
+  const bonusSteps = (s.bonusSteps ?? 0) + (choice.bonusSteps ?? 0);
+  const declined = info.isStart && choice.advance === false;
+  const quests = [...(s.quests ?? [])];
+  let questCompleted = false;
+  let note: string | undefined = choice.bonusSteps ? `${info.quest.name}: открыт ещё один шаг в дорогу.` : undefined;
+  let questCooldownUntil = s.questCooldownUntil;
+
+  if (declined) {
+    // Завязку отклонили — квест не начинаем, ставим короткий кулдаун.
+    questCooldownUntil = s.step + QUEST_DECLINE_COOLDOWN;
+  } else if (info.isStart) {
+    // Начинаем квест: планируем следующую стадию.
+    const nextIndex = 1;
+    const nextStage = info.quest.stages[nextIndex];
+    if (nextStage) {
+      quests.push({ id: info.quest.id, stage: nextIndex, nextStepAt: s.step + (nextStage.delaySteps ?? QUEST_STAGE_DELAY), startedDate: today });
+    } else {
+      // Квест из одной стадии — сразу завершён.
+      quests.push({ id: info.quest.id, stage: 0, nextStepAt: s.step, startedDate: today, done: true });
+      questCompleted = true;
+    }
+  } else {
+    // Прохождение промежуточной/финальной стадии активного квеста.
+    const idx = quests.findIndex((q) => q.id === info.quest.id);
+    const nextIndex = info.stageIndex + 1;
+    if (nextIndex >= info.quest.stages.length) {
+      if (idx >= 0) quests[idx] = { ...quests[idx], done: true };
+      questCompleted = true;
+      note = `Странствие завершено: ${info.quest.name}.`;
+    } else if (idx >= 0) {
+      const nextStage = info.quest.stages[nextIndex];
+      quests[idx] = { ...quests[idx], stage: nextIndex, nextStepAt: s.step + (nextStage.delaySteps ?? QUEST_STAGE_DELAY) };
+    }
+  }
+
+  const log = pushLog(s, { date: today, eventId: `quest-${info.quest.id}-${info.stage.id}`, choice: choice.text, outcome: choice.outcome });
+
+  return {
+    state: { ...s, affinity, skills, trinkets, quests: quests.length > 0 ? quests : undefined, questCooldownUntil, bonusSteps: bonusSteps > 0 ? bonusSteps : s.bonusSteps, log },
+    learned,
+    found: grantId,
+    note,
+    questCompleted,
+    questDeclined: declined,
+  };
+}
+
+// ===== Периодические визиты драконов-друзей (Главная) =====
+
+export interface DragonVisit {
+  dragonId: string;
+  title: string;
+  text: string;
+  art: string;
+  choices: DragonInteractionChoice[];
+}
+
+/** Тематические редкие дары дракона по его id (что он приносит «с высоты»). */
+const dragonGiftPools: Record<string, string[]> = {
+  mountain: ['amber', 'clover', 'dried-flower'],
+  forest: ['old-key', 'bell', 'mirror'],
+  storm: ['holed-stone', 'mirror', 'candle-stub'],
+  mist: ['holed-stone', 'dried-flower', 'mirror'],
+  twilight: ['candle-stub', 'charm-bag', 'mirror'],
+  amber: ['amber', 'clover', 'candle-stub'],
+  black: ['charm-bag', 'candle-stub', 'mirror'],
+};
+
+interface DragonVisitTemplate {
+  id: string;
+  title: string;
+  needsGift?: boolean;
+  text: (name: string) => string;
+  choices: (identityId: string, giftId?: string, giftName?: string) => DragonInteractionChoice[];
+}
+
+const dragonVisitTemplates: DragonVisitTemplate[] = [
+  {
+    id: 'roof-shadow',
+    title: 'Тень над крышей',
+    text: (name) => `На закате ${name.toLowerCase()} бесшумно ложится тенью над твоим домом. Он не зовёт в путь — просто сторожит твой вечер, как сторожат самое дорогое.`,
+    choices: (identityId) => [
+      { text: 'Посидеть с ним под звёздами', affinity: { [identityId]: 1 }, attention: -2, outcome: 'Вы молчите вдвоём, пока небо наливается звёздами. Рядом с таким стражем даже завтрашние тревоги кажутся мелкими и решаемыми.' },
+      { text: 'Попросить облететь дозором', bonusSteps: 1, attention: -1, outcome: 'Дракон поднимается и чертит круг над округой. Возвращается спокойным — значит, и тебе можно спать спокойно. Утром сил будто на шаг больше.' },
+    ],
+  },
+  {
+    id: 'gift-from-above',
+    title: 'Дар с высоты',
+    needsGift: true,
+    text: (name) => `${name} опускается к самому порогу и разжимает когти: он принёс тебе что-то, подобранное в дальних краях, куда тебе пока не долететь.`,
+    choices: (identityId, _giftId, giftName) => [
+      { text: `Принять дар: ${giftName}`, grantTrinket: _giftId, affinity: { [identityId]: 1 }, outcome: `Ты бережно берёшь ${giftName?.toLowerCase()} из тёплых когтей. Дракон доволен: то, что он высмотрел с высоты, пригодилось именно тебе.` },
+      { text: 'Поблагодарить, но оставить лесу', attention: -2, outcome: 'Ты не берёшь дар себе, а просишь вернуть его туда, где он нужнее. Дракон одобрительно урчит: не всё, что найдено, надо держать в руках.' },
+    ],
+  },
+  {
+    id: 'warm-scale',
+    title: 'Тёплая чешуя',
+    text: (name) => `Вечер выдался зябким, и ${name.toLowerCase()} обвивает твой дом кольцом, отдавая ему тепло нагретой солнцем чешуи. В комнатах становится уютно, как в детстве.`,
+    choices: (identityId) => [
+      { text: 'Уснуть под его крылом', affinity: { [identityId]: 1 }, attention: -2, outcome: 'Ты засыпаешь под мерное тёплое дыхание, и ни один дурной сон не подходит близко. Драконье крыло — лучшее одеяло на свете.' },
+      { text: 'Не спать, слушать его дыхание', affinity: { mystic: 1 }, outcome: 'Ты сидишь в тепле и слушаешь, как дышит древнее существо. В этом мерном гуле тебе слышится что-то важное, чему пока нет слов.' },
+    ],
+  },
+  {
+    id: 'far-tidings',
+    title: 'Весть издалека',
+    text: (name) => `${name} возвращается из долгого странствия, пахнущий чужим ветром и дальним дождём. Он явно хочет поделиться тем, что видел за краем твоих троп.`,
+    choices: (identityId) => [
+      { text: 'Расспросить о дальних тропах', bonusSteps: 1, outcome: 'Дракон «рассказывает» как умеет — образами, что оседают прямо в памяти. Теперь ты знаешь короткий проход там, где раньше плутала. Дорога даст лишний шаг.' },
+      { text: 'Просто порадоваться возвращению', affinity: { [identityId]: 1 }, attention: -1, outcome: 'Ты не выспрашиваешь вестей, а просто рада, что он снова дома. Дракон складывает крылья у порога, и вечер выходит тёплым и полным.' },
+    ],
+  },
+];
+
+export function deriveDragonVisit(state: PathState, identityId: string, today: string): DragonVisit | null {
+  if (state.lastDragonVisitDate === today) return null;
+  const friends = befriendedDragons(state);
+  if (friends.length === 0) return null;
+
+  const seed = userSeed();
+  if (hash(`home-dragon-show-${seed}-${today}-${state.step}`) % 100 >= 32) return null;
+
+  const dragonId = friends[hash(`home-dragon-who-${seed}-${today}-${state.step}`) % friends.length];
+  const dragon = dragons.find((d) => d.id === dragonId);
+  if (!dragon) return null;
+
+  const pool = dragonGiftPools[dragonId] ?? [];
+  const giftId = pool.find((id) => !state.trinkets.includes(id));
+  const giftName = giftId ? trinkets.find((t) => t.id === giftId)?.name : undefined;
+
+  // Шаблон-дар показываем только когда есть что подарить (иначе — обычный визит).
+  const usable = dragonVisitTemplates.filter((t) => !t.needsGift || giftId);
+  const template = usable[hash(`home-dragon-tpl-${seed}-${today}-${state.step}`) % usable.length];
+
+  return {
+    dragonId,
+    title: template.title,
+    text: template.text(dragon.name),
+    art: dragon.art,
+    choices: template.choices(identityId, giftId, giftName),
+  };
+}
+
+export function commitDragonVisit(
+  state: PathState,
+  visit: DragonVisit,
+  choice: DragonInteractionChoice,
+  identityId: string,
+  today: string,
+): { state: PathState; learned: string[]; found?: string; note?: string } {
+  const grantId = choice.grantTrinket && !state.trinkets.includes(choice.grantTrinket) ? choice.grantTrinket : undefined;
+  // Визит на Главную не тратит шаг тропы; меняем лишь внимание, склонность и котомку.
+  const base = shiftForestAttention({ ...state, lastDragonVisitDate: today }, softenAttentionDelta(state, choice.attention ?? 0));
+
+  const affinity = { ...base.affinity };
+  for (const [k, v] of Object.entries(choice.affinity ?? {})) affinity[k] = (affinity[k] || 0) + v;
+
+  const skills = [...base.skills];
+  const learned: string[] = [];
+  for (const [id, v] of Object.entries(affinity)) {
+    if (id !== identityId && v >= SKILL_THRESHOLD && !skills.includes(id)) {
+      skills.push(id);
+      learned.push(id);
+    }
+  }
+
+  const nextTrinkets = grantId ? [...base.trinkets, grantId] : base.trinkets;
+  const bonusSteps = (base.bonusSteps ?? 0) + (choice.bonusSteps ?? 0);
+  const log = pushLog(base, { date: today, eventId: 'dragon-visit-' + visit.dragonId, choice: choice.text, outcome: choice.outcome });
+  const note = choice.bonusSteps
+    ? `${dragonById(visit.dragonId)?.name ?? 'Дракон'} открыл ещё один шаг в дорогу.`
+    : grantId
+      ? `${trinkets.find((t) => t.id === grantId)?.name ?? 'Находка'} — в котомке.`
+      : undefined;
+
+  return {
+    state: { ...base, affinity, skills, trinkets: nextTrinkets, bonusSteps: bonusSteps > 0 ? bonusSteps : base.bonusSteps, log },
+    learned,
+    found: grantId,
+    note,
+  };
 }
 
 export function deriveFamiliarNudge(state: PathState, identityId: string, today: string): FamiliarInteraction | null {
@@ -1477,6 +1899,8 @@ export type PathStep =
   | { kind: 'dragon'; dragonId: string }
   | { kind: 'keeper' }
   | { kind: 'keeperEvent'; interaction: KeeperInteraction }
+  | { kind: 'wanderer'; interaction: WandererInteraction }
+  | { kind: 'quest'; quest: PathQuest; stageIndex: number; stage: QuestStage; isStart: boolean }
   | { kind: 'crossroad'; targetId: string };
 
 /** Сцены, доступные текущему типажу и ещё не пройденные. */
@@ -1528,6 +1952,11 @@ export function deriveStep(state: PathState, identityId: string, today: string):
     // проваливаемся в обычный рандом, а подарочный шаг снимется при шаге.
     if (!hasKeeperFriend(state)) return { kind: 'keeper' };
   }
+  if (forced === 'black-dragon') {
+    // Разовая гарантированная встреча с Чёрным драконом. Если уже подружились —
+    // проваливаемся в обычный рандом, а подарочный шаг снимется при шаге.
+    if (!befriendedDragons(state).includes('black')) return { kind: 'dragon', dragonId: 'black' };
+  }
   if (forced === 'dragon-chance') {
     const did = pickDragon(state, seed, identityId);
     if (did && hash(`gift-dragon-${seed}-${state.step}`) % 100 < GIFT_DRAGON_CHANCE) {
@@ -1549,6 +1978,12 @@ export function deriveStep(state: PathState, identityId: string, today: string):
 
   const target = pendingCrossroad(state, identityId);
   if (target) return { kind: 'crossroad', targetId: target };
+
+  // Активная стадия квеста, что уже вышла навстречу — продолжаем странствие в первую очередь.
+  const questStage = deriveActiveQuestStage(state);
+  if (questStage) {
+    return { kind: 'quest', quest: questStage.quest, stageIndex: questStage.stageIndex, stage: questStage.stage, isStart: false };
+  }
 
   const attention = forestAttentionLevel(state);
   if (attention >= 4 && hash(`attention-${seed}-${state.step}`) % 100 < 18 + attention * 7) {
@@ -1574,6 +2009,18 @@ export function deriveStep(state: PathState, identityId: string, today: string):
   const keeperInteraction = deriveKeeperInteraction(state, identityId, seed);
   if (keeperInteraction && hash(`keeper-event-show-${seed}-${state.step}`) % 100 < KEEPER_EVENT_CHANCE) {
     return { kind: 'keeperEvent', interaction: keeperInteraction };
+  }
+
+  // Странник — «человеческая» встреча, доступна всем типажам, с кулдауном после разговора.
+  if (hash(`wanderer-${seed}-${state.step}`) % 100 < wandererChance(state)) {
+    const wandererInteraction = deriveWanderer(state, seed);
+    if (wandererInteraction) return { kind: 'wanderer', interaction: wandererInteraction };
+  }
+
+  // Завязка нового мини-квеста — редкая, только когда активного квеста нет.
+  if (hash(`quest-start-${seed}-${state.step}`) % 100 < QUEST_START_CHANCE) {
+    const start = deriveQuestStart(state, identityId, seed);
+    if (start) return { kind: 'quest', quest: start.quest, stageIndex: 0, stage: start.stage, isStart: true };
   }
 
   const roll = hash(`step-${seed}-${state.step}`) % 100;

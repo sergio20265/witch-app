@@ -1,8 +1,10 @@
 import { readStore, writeStore } from '../storage/useLocalStorage';
 import type { Ingredient, PathFamiliarState, PathState } from '../storage/types';
 import { defaultPathState } from './path';
+import { isGiftUnlocked } from './giftUnlock';
 
-const FLAG = 'birthdayGift20260708v5';
+export const BIRTHDAY_GIFT_FLAG = 'birthdayGift20260708v5';
+const FLAG = BIRTHDAY_GIFT_FLAG;
 
 function unique(list: string[]): string[] {
   return [...new Set(list.filter(Boolean))];
@@ -70,6 +72,9 @@ function addForcedStepOnce(state: PathState, step: NonNullable<PathState['forced
 
 export function applyBirthdayGiftOnce(): void {
   try {
+    // Подарки только для того, кто ввёл подарочный код. Флаг FLAG не трогаем,
+    // чтобы после разблокировки подарок всё-таки применился.
+    if (!isGiftUnlocked()) return;
     if (readStore<boolean>(FLAG, false)) return;
 
     const identity = readStore<string>('userIdentity', '');

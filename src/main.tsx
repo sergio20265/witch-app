@@ -5,6 +5,8 @@ import { initNative } from './lib/native';
 import { migrateImagesOnce } from './lib/migrateImages';
 import { applyPathApologyOnce } from './lib/migratePathApology';
 import { applyBirthdayGiftOnce } from './lib/birthdayGift';
+import { applyBlackDragonGiftOnce } from './lib/blackDragonGift';
+import { fixBirthdayCardOnce } from './lib/migrateBirthdayCard';
 import './styles/theme.css';
 import './styles/screens.css';
 
@@ -14,6 +16,8 @@ migrateImagesOnce().finally(() => {
   // Извинение за залипший рандом тропинки: вернуть день и подарить фамильяра.
   applyPathApologyOnce();
   applyBirthdayGiftOnce();
+  applyBlackDragonGiftOnce();
+  fixBirthdayCardOnce();
 
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

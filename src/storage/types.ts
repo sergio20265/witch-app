@@ -192,16 +192,31 @@ export interface PathState {
   lastFamiliarNudgeDate?: string;     // yyyy-mm-dd последнего вне-шагового взаимодействия
   lastFamiliarGiftDate?: string;      // yyyy-mm-dd последней принесённой фамильяром находки
   lastFamiliarCareDate?: string;      // yyyy-mm-dd последнего простого ежедневного взаимодействия
+  lastDragonVisitDate?: string;       // yyyy-mm-dd последнего визита дракона-друга на Главную
   forestAttention?: number;           // 0..6: насколько тропа присматривается к шагам
   altar?: PathAltarState;             // выбранный алтарь и предметы, лежащие на нём
   knownPotionRecipes?: string[];       // открытые экспериментами рецепты зелий
   potionEffects?: PathPotionEffect[];  // временные эффекты зелий на тропе
   lastPotionBrewDate?: string;         // yyyy-mm-dd последней успешной варки
   development?: PathDevelopmentState;  // развитие общей тропы и конкретных ведьминых путей
+  wandererCooldownUntil?: number;      // до какого step странники не встречаются (после встречи)
+  metWanderers?: string[];             // id странников, с которыми уже говорила (для профиля)
+  claimedRelicSets?: string[];         // id собранных наборов находок, чей боон уже получен
+  quests?: PathQuestState[];           // активные и завершённые многошаговые мини-квесты
+  questCooldownUntil?: number;         // до какого step не предлагать новый квест (после отказа)
+}
+
+/** Состояние одного многошагового мини-квеста на тропе. */
+export interface PathQuestState {
+  id: string;                          // id квеста (см. data/pathQuests.ts)
+  stage: number;                       // индекс текущей (ещё не пройденной) стадии
+  nextStepAt: number;                  // с какого state.step стадия выходит навстречу
+  startedDate: string;                 // yyyy-mm-dd начала
+  done?: boolean;                      // квест завершён (успешно)
 }
 
 /** Гарантированный шаг из очереди подарка: фамильяр-«извинение» / медведь / шанс дракона. */
-export type ForcedStep = 'gift' | 'bear' | 'dragon-chance' | 'birthday-flight' | 'keeper';
+export type ForcedStep = 'gift' | 'bear' | 'dragon-chance' | 'birthday-flight' | 'keeper' | 'black-dragon';
 
 // ===== Воспоминания =====
 export interface Memory {

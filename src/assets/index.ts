@@ -55,7 +55,17 @@ import card50 from './cards/card-50.webp';
 import card51 from './cards/card-51.webp';
 import card52 from './cards/card-52.webp';
 import card53 from './cards/card-53.webp';
+import card54 from './cards/card-54.webp';
+import card55 from './cards/card-55.webp';
+import card56 from './cards/card-56.webp';
+import card57 from './cards/card-57.webp';
+import card58 from './cards/card-58.webp';
+import card59 from './cards/card-59.webp';
+import card60 from './cards/card-60.webp';
+import card61 from './cards/card-61.webp';
 import card100 from './cards/card-100.webp';
+import card101 from './cards/card-101.webp';
+import card102 from './cards/card-102.webp';
 
 import rune1 from './runes/rune-1.webp';
 import rune2 from './runes/rune-2.webp';
@@ -144,7 +154,17 @@ export const cardArtById: Record<string, string> = {
   'card-51': card51,
   'card-52': card52,
   'card-53': card53,
+  'card-54': card54,
+  'card-55': card55,
+  'card-56': card56,
+  'card-57': card57,
+  'card-58': card58,
+  'card-59': card59,
+  'card-60': card60,
+  'card-61': card61,
   'card-100': card100,
+  'card-101': card101,
+  'card-102': card102,
 };
 
 /** Прямое соответствие rune_id → URL изображения руны. */
